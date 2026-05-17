@@ -1,0 +1,50 @@
+tags:
+  - 脚本项目
+summary: 获取脚本项目 Git 远端分支列表
+description: 根据脚本项目ID或Git仓库地址读取远端分支，用于前端选择要拉取的分支。
+parameters:
+  - name: body
+    in: body
+    required: true
+    schema:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: 脚本项目ID，编辑已有项目时传入
+        project_id:
+          type: integer
+          description: 脚本项目ID，兼容字段
+        repo_url:
+          type: string
+          description: Git仓库地址，新建项目时传入
+        git_repo_url:
+          type: string
+          description: Git仓库地址，兼容字段
+responses:
+  200:
+    description: 请求成功
+    schema:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 200
+        msg:
+          type: string
+          example: 请求成功
+        data:
+          type: object
+          properties:
+            repo_url:
+              type: string
+            branches:
+              type: array
+              items:
+                type: string
+            default_branch:
+              type: string
+  400:
+    description: 缺少Git仓库地址
+  500:
+    description: 获取远端分支失败

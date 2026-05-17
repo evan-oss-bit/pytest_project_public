@@ -1,0 +1,65 @@
+﻿tags:
+  - 更新项目
+description:
+  flasgger进行在线文档生成，更新脚本项目信息
+parameters:
+  - name: body
+    in: body
+    required: true
+    schema:
+      id: update_project
+      properties:
+        id:
+          type: integer
+          description: 项目id
+        name:
+          type: string
+          description: 项目名称
+        description:
+          type: string
+          description: 项目描述
+        controller:
+          type: string
+          description: 项目负责人
+        business_department:
+          type: string
+          description: 业务部门名称，兼容旧参数
+        business_department_id:
+          type: integer
+          description: 业务部门ID
+        environment:
+          type: string
+          description: 环境，dev/test/staging/prod
+        priority:
+          type: string
+          description: 项目优先级
+        maint_status:
+          type: string
+          description: 维护状态，normal/paused/deprecated
+        tags:
+          type: string
+          description: 项目标签，多个标签可用逗号分隔
+        git_repo_url:
+          type: string
+          description: Git 仓库地址，用于展示和校验
+        git_branch:
+          type: string
+          description: 默认拉取分支，为空则使用当前分支
+        git_auto_sync:
+          type: integer
+          description: Git pull 成功后是否自动同步用例，1 是，0 否
+responses:
+  200:
+    description: 更新项目成功
+    examples:
+      application/json:
+        code: 200
+        msg: 请求成功
+        data: 1
+  404:
+    description: 更新项目失败
+    examples:
+      application/json:
+        code: 404
+        msg: 更新项目失败
+        data:

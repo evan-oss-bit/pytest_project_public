@@ -1,0 +1,30 @@
+tags:
+  - 更新配置信息
+description:
+    flasgger进行在线文档生成，更新配置信息
+parameters:
+  - name: body
+    in: body
+    required: true
+    schema:
+      id: 19
+      properties:
+        cfg_name:
+          type: string
+          description: 配置名称
+        cfg:
+          type: string
+          description: 配置参数（json类型）
+        id:
+          type: integer
+          description: 配置id
+        project_id:
+          type: integer
+          description: 项目id
+responses:
+  200:
+     description: 更新配置信息成功
+     example:
+  404:
+     description: 更新配置信息失败
+     example:

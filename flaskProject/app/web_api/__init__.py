@@ -1,0 +1,13 @@
+#!/usr/bin/python3.7
+# -*- coding: utf-8 -*-
+from flask import Blueprint
+
+project = Blueprint("project", __name__, url_prefix='/project')
+version = Blueprint("version", __name__, url_prefix='/version')
+config = Blueprint("config", __name__, url_prefix='/config')
+cases = Blueprint("cases", __name__, url_prefix='/cases')
+module = Blueprint("module", __name__, url_prefix='/module')
+testset = Blueprint("testset", __name__, url_prefix='/testset')
+caseresult = Blueprint("caseresult", __name__, url_prefix='/caseresult')
+test_task = Blueprint("test_task", __name__, url_prefix='/test_task')
+# sock_blueprint = Blueprint('sock_blueprint', __name__, url_prefix='/sock_blueprint')  # websocket

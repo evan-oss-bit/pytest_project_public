@@ -1,0 +1,42 @@
+tags:
+  - 运行测试集合
+description:
+    flasgger进行在线文档生成，运行测试集合
+parameters:
+  - name: body
+    in: body
+    required: true
+    schema:
+      id: 16
+      properties:
+        project_name:
+          type: string
+          description: 项目名称
+        mark:
+          type: string
+          description: 备注
+        config_id:
+          type: integer
+          description: 配置id
+        id:
+          type: integer
+          description: 测试集id
+        version_id:
+          type: integer
+          description: 版本id
+        case_ids:
+          type: array
+          description: 测试脚本id列表
+        rerun_type:
+          type: integer
+          description: 运行测试集脚本类型
+        project_id:
+          type: integer
+          description: 项目id
+responses:
+  200:
+     description: 运行测试集合成功
+     example:
+  404:
+     description: 运行测试集合失败
+     example:

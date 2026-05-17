@@ -1,0 +1,27 @@
+tags:
+  - 获取版本号列表
+description:
+    flasgger进行在线文档生成，获取版本号列表
+parameters:
+  - name: body
+    in: body
+    required: true
+    schema:
+      id: 14
+      properties:
+        page_no:
+          type: integer
+          description: 分页页数
+        page_size:
+          type: integer
+          description: 分页大小
+        version:
+          type: string
+          description: 版本号
+responses:
+  200:
+     description: 获取版本号列表成功
+     example:
+  404:
+     description: 获取版本号列表失败
+     example:

@@ -1,0 +1,36 @@
+tags:
+  - 新增或修改测试集合
+description:
+    flasgger进行在线文档生成，新增或修改测试集合
+parameters:
+  - name: body
+    in: body
+    required: true
+    schema:
+      id: 5
+      properties:
+        testset_title:
+          type: string
+          description: 测试集名称
+        config_id:
+          type: integer
+          description: 配置id
+        version_id:
+          type: integer
+          description: 版本id
+        case_ids:
+          type: array
+          description: 测试脚本id列表
+        script_type:
+          type: integer
+          description: 脚本类型
+        project_id:
+          type: integer
+          description: 项目id
+responses:
+  200:
+     description: 新增或修改测试集合成功
+     example:
+  404:
+     description: 新增或修改测试集合失败
+     example:

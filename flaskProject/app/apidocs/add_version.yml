@@ -1,0 +1,31 @@
+tags:
+  - 新增或者修改版本号
+description:
+  flasgger进行在线文档生成，新增或者修改版本号
+parameters:
+  - name: body
+    in: body
+    required: true
+    schema:
+      id: 6
+      properties:
+        changelog:
+          type: string
+          description: 备注
+        id:
+          type: integer
+          description: 版本号id
+        project_id:
+          type: integer
+          description: 项目id
+        version:
+          type: string
+          description: 版本号名称
+
+responses:
+  200:
+    description: 新增或者修改版本号成功
+    example:
+  404:
+    description: 新增或者修改版本号失败
+    example:

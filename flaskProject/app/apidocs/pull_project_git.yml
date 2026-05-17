@@ -1,0 +1,40 @@
+tags:
+  - 脚本项目 Git 更新
+description:
+  flasgger进行在线文档生成，在脚本项目目录执行 git pull --ff-only，并可在拉取成功后自动同步 pytest 用例
+parameters:
+  - name: body
+    in: body
+    required: true
+    schema:
+      id: pull_project_git
+      properties:
+        id:
+          type: integer
+          description: 项目id
+        project_id:
+          type: integer
+          description: 项目id，和id二选一
+        branch:
+          type: string
+          description: 指定拉取分支，为空则使用项目配置分支或当前分支
+        auto_sync:
+          type: boolean
+          description: pull 成功后是否自动同步用例；不传则使用项目配置
+responses:
+  200:
+    description: Git 拉取成功
+    examples:
+      application/json:
+        code: 200
+        msg: Git 拉取完成，脚本同步完成
+        data:
+          project_id: 1
+          project_name: test_demo
+          auto_sync: true
+  400:
+    description: 项目目录不是 Git 仓库
+  404:
+    description: 缺少项目id、项目不存在或项目目录不存在
+  500:
+    description: Git 拉取失败

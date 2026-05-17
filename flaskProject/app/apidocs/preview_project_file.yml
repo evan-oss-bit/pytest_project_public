@@ -1,0 +1,48 @@
+tags:
+  - 预览项目文件
+description:
+  flasgger进行在线文档生成，预览脚本项目目录内的文本文件内容
+parameters:
+  - name: body
+    in: body
+    required: true
+    schema:
+      id: preview_project_file
+      properties:
+        id:
+          type: integer
+          description: 项目id
+        project_id:
+          type: integer
+          description: 项目id，和id二选一
+        path:
+          type: string
+          description: 项目内相对文件路径
+responses:
+  200:
+    description: 预览项目文件成功
+    examples:
+      application/json:
+        code: 200
+        msg: 请求成功
+        data:
+          name: test_demo.py
+          path: tests/test_demo.py
+          ext: py
+          size: 1024
+          mtime: "2026-05-11 12:00:00"
+          content: "def test_demo():\n    assert True\n"
+  400:
+    description: 路径不合法、文件类型不支持或文件过大
+    examples:
+      application/json:
+        code: 400
+        msg: 该文件类型暂不支持在线预览
+        data:
+  404:
+    description: 缺少项目id、项目不存在或文件不存在
+    examples:
+      application/json:
+        code: 404
+        msg: 文件不存在
+        data:

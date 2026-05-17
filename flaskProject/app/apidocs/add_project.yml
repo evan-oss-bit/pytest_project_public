@@ -1,0 +1,58 @@
+﻿tags:
+  - 新增或修改项目
+description:
+  flasgger进行在线文档生成，新增或修改项目
+parameters:
+  - name: body
+    in: body
+    required: true
+    schema:
+      id: 4
+      properties:
+        description:
+          type: string
+          description: 备注
+        controller:
+          type: string
+          description: 项目所属人员
+        business_department:
+          type: string
+          description: 业务部门名称，兼容旧参数
+        business_department_id:
+          type: integer
+          description: 业务部门ID
+        environment:
+          type: string
+          description: 环境，dev/test/staging/prod
+        priority:
+          type: string
+          description: 项目优先级
+        maint_status:
+          type: string
+          description: 维护状态，normal/paused/deprecated
+        tags:
+          type: string
+          description: 项目标签，多个标签可用逗号分隔
+        git_repo_url:
+          type: string
+          description: Git 仓库地址，用于展示和校验
+        git_branch:
+          type: string
+          description: 默认拉取分支，为空则使用当前分支
+        git_auto_sync:
+          type: integer
+          description: Git pull 成功后是否自动同步用例，1 是，0 否
+        id:
+          type: integer
+          description: 项目id
+        name:
+          type: string
+          description: 项目名称
+
+responses:
+  200:
+    description: 新增或修改项目成功
+    example:
+  404:
+    description: 新增或修改项目失败
+    example:

@@ -1,0 +1,38 @@
+tags:
+  - 新增测试脚本
+description:
+    flasgger进行在线文档生成，新增测试脚本
+parameters:
+  - name: body
+    in: body
+    required: true
+    schema:
+      id: 1
+      properties:
+        description:
+          type: string
+          description: 备注
+          required: false
+        module_id:
+          type: integer
+          description: 模块id
+          required: true
+        version_id:
+          type: integer
+          description: 版本id
+          required: true
+        script_type:
+          type: integer
+          description: 脚本类型
+          required: true
+        project_id:
+          type: integer
+          description: 项目id
+          required: true
+responses:
+  200:
+     description: 新增测试脚本成功
+     example:
+  404:
+     description: 新增测试脚本失败
+     example:

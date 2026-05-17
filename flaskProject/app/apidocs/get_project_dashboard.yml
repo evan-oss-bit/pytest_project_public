@@ -1,0 +1,40 @@
+tags:
+  - 获取项目总览
+description:
+  flasgger进行在线文档生成，获取脚本项目总览、统计、健康状态、脚本变更、最近报告和运行中信息
+parameters:
+  - name: body
+    in: body
+    required: true
+    schema:
+      id: get_project_dashboard
+      properties:
+        id:
+          type: integer
+          description: 项目id
+        project_id:
+          type: integer
+          description: 项目id，和id二选一
+responses:
+  200:
+    description: 获取项目总览成功
+    examples:
+      application/json:
+        code: 200
+        msg: 请求成功
+        data:
+          project: {}
+          stats: {}
+          file_status: {}
+          script_changes: {}
+          health: {}
+          recent_reports: []
+          running_testsets: []
+          running_tasks: []
+  404:
+    description: 缺少项目id或项目不存在
+    examples:
+      application/json:
+        code: 404
+        msg: 项目不存在
+        data:

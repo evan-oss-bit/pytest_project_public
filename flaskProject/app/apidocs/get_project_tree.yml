@@ -1,0 +1,51 @@
+tags:
+  - 获取项目文件树
+description:
+  flasgger进行在线文档生成，获取脚本项目目录树，用于前端像IDE一样预览项目结构
+parameters:
+  - name: body
+    in: body
+    required: true
+    schema:
+      id: get_project_tree
+      properties:
+        id:
+          type: integer
+          description: 项目id
+        project_id:
+          type: integer
+          description: 项目id，和id二选一
+responses:
+  200:
+    description: 获取项目文件树成功
+    examples:
+      application/json:
+        code: 200
+        msg: 请求成功
+        data:
+          name: test_demo
+          path: C:/project/pytest_project/flaskProject/testscriptproject/test_demo
+          tree:
+            - label: tests
+              path: tests
+              type: dir
+              children:
+                - label: test_demo.py
+                  path: tests/test_demo.py
+                  type: file
+                  ext: py
+                  size: 1024
+  400:
+    description: 项目路径不合法
+    examples:
+      application/json:
+        code: 400
+        msg: 项目路径不合法
+        data:
+  404:
+    description: 缺少项目id、项目不存在或项目目录不存在
+    examples:
+      application/json:
+        code: 404
+        msg: 项目不存在
+        data:

@@ -1,0 +1,15 @@
+tags:
+  - 业务部门
+description: 获取业务部门列表
+parameters:
+  - name: body
+    in: body
+    required: false
+    schema:
+      properties:
+        name:
+          type: string
+          description: 按业务部门名称模糊查询
+responses:
+  200:
+    description: 获取业务部门列表成功

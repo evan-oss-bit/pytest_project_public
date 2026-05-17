@@ -1,0 +1,33 @@
+tags:
+  - 新增或修改模块信息
+description:
+    flasgger进行在线文档生成，新增或修改模块信息
+parameters:
+  - name: body
+    in: body
+    required: true
+    schema:
+      id: 3
+      properties:
+        description:
+          type: string
+          description: 备注
+        id:
+          type: integer
+          description: 模块id
+        version_id:
+          type: integer
+          description: 版本id
+        module:
+          type: string
+          description: 模块名称
+        project_id:
+          type: integer
+          description: 项目id
+responses:
+  200:
+     description: 新增或修改模块信息成功
+     example:
+  404:
+     description: 新增或修改模块信息失败
+     example:

@@ -1,0 +1,24 @@
+tags:
+  - 获取测试报告内容
+description:
+  flasgger进行在线文档生成，获取测试报告内容
+parameters:
+  - name: body
+    in: body
+    required: true
+    schema:
+      id: 15
+      properties:
+        filename:
+          type: string
+          description: 报告名称
+        set_id:
+          type: integer
+          description: 测试集id
+responses:
+  200:
+    description: 获取测试报告内容成功
+    example:
+  404:
+    description: 获取测试报告内容失败
+    example:

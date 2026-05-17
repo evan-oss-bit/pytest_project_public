@@ -1,0 +1,21 @@
+tags:
+  - 终止测试集合
+description:
+  flasgger进行在线文档生成，终止测试集合
+parameters:
+  - name: body
+    in: body
+    required: true
+    schema:
+      id: 17
+      properties:
+        ids:
+          type: array
+          description: 测试集id列表
+responses:
+  200:
+    description: 终止测试集合成功
+    example:
+  404:
+    description: 终止测试集合失败
+    example:

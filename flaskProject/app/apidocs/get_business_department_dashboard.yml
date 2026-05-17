@@ -1,0 +1,15 @@
+tags:
+  - 业务部门
+description: 获取业务部门总览信息，包含部门统计和脚本项目列表
+parameters:
+  - name: body
+    in: body
+    required: true
+    schema:
+      properties:
+        id:
+          type: integer
+          description: 业务部门ID
+responses:
+  200:
+    description: 获取业务部门总览成功

@@ -1,0 +1,30 @@
+tags:
+  - 获取报告列表
+description:
+    flasgger进行在线文档生成，获取报告列表
+parameters:
+  - name: body
+    in: body
+    required: true
+    schema:
+      id: 12
+      properties:
+        set_id:
+          type: integer
+          description: 测试集id
+        title:
+          type: string
+          description: 报告名称
+        page_no:
+          type: integer
+          description: 分页页数
+        page_size:
+          type: integer
+          description: 分页大小
+responses:
+  200:
+     description: 获取报告列表成功
+     example:
+  404:
+     description: 获取报告列表失败
+     example:

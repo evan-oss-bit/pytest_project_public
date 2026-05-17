@@ -1,0 +1,33 @@
+tags:
+  - 获取项目列表
+description:
+    flasgger进行在线文档生成，获取项目列表
+parameters:
+  - name: body
+    in: body
+    required: true
+    schema:
+      id: 11
+      properties:
+        name:
+          type: string
+          description: 项目名称
+        business_department_id:
+          type: integer
+          description: 业务部门ID
+        business_department:
+          type: string
+          description: 业务部门名称，兼容旧参数
+        page_no:
+          type: integer
+          description: 分页页数
+        page_size:
+          type: integer
+          description: 分页大小
+responses:
+  200:
+     description: 获取项目列表成功
+     example:
+  404:
+     description: 获取项目列表失败
+     example:

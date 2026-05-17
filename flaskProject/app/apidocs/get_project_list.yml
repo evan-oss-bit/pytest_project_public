@@ -1,0 +1,28 @@
+tags:
+  - 获取脚本项目目录列表
+description:
+  flasgger进行在线文档生成，扫描testscriptproject目录，获取所有脚本项目及配置状态
+parameters: []
+responses:
+  200:
+    description: 获取脚本项目目录列表成功
+    examples:
+      application/json:
+        code: 200
+        msg: 请求成功
+        data:
+          - name: test_demo
+            status: 已新建
+            path: C:/project/pytest_project/flaskProject/testscriptproject/test_demo
+            has_data_ini: true
+            has_pytest_ini: true
+            py_file_count: 3
+            mtime: "2026-05-11 12:00:00"
+        total: 1
+  404:
+    description: 获取脚本项目目录列表失败
+    examples:
+      application/json:
+        code: 404
+        msg: 没有找到项目！
+        data: []

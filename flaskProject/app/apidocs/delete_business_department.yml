@@ -1,0 +1,17 @@
+tags:
+  - 业务部门
+description: 删除业务部门，部门下仍有脚本项目时不允许删除
+parameters:
+  - name: body
+    in: body
+    required: true
+    schema:
+      properties:
+        id:
+          type: integer
+          description: 业务部门ID
+responses:
+  200:
+    description: 删除业务部门成功
+  404:
+    description: 删除失败

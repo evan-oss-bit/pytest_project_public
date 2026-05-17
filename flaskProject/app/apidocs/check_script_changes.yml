@@ -1,0 +1,45 @@
+tags:
+  - 检测脚本变更
+description:
+  flasgger进行在线文档生成，检测脚本文件和平台用例之间的差异
+parameters:
+  - name: body
+    in: body
+    required: true
+    schema:
+      id: check_script_changes
+      properties:
+        id:
+          type: integer
+          description: 项目id
+        project_id:
+          type: integer
+          description: 项目id，和id二选一
+responses:
+  200:
+    description: 检测脚本变更成功
+    examples:
+      application/json:
+        code: 200
+        msg: 请求成功
+        data:
+          project_id: 1
+          project_name: test_demo
+          scanned_case_count: 10
+          db_case_count: 9
+          added_case_count: 1
+          deleted_case_count: 0
+          modified_script_count: 0
+          parse_error_count: 0
+          added_cases: []
+          deleted_cases: []
+          modified_scripts: []
+          parse_errors: []
+          checked_time: "2026-05-11 12:00:00"
+  404:
+    description: 缺少项目id或项目不存在
+    examples:
+      application/json:
+        code: 404
+        msg: 项目不存在
+        data:

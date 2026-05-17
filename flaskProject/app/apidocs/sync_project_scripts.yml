@@ -1,0 +1,50 @@
+tags:
+  - 同步项目脚本
+description:
+  flasgger进行在线文档生成，扫描脚本项目目录并同步pytest用例到平台
+parameters:
+  - name: body
+    in: body
+    required: true
+    schema:
+      id: sync_project_scripts
+      properties:
+        id:
+          type: integer
+          description: 项目id
+        project_id:
+          type: integer
+          description: 项目id，和id二选一
+        description:
+          type: string
+          description: 用例备注
+        script_type:
+          type: integer
+          description: 脚本类型，默认0
+        version_id:
+          type: integer
+          description: 版本id，默认0
+        module_id:
+          type: integer
+          description: 模块id
+responses:
+  200:
+    description: 同步项目脚本成功
+    examples:
+      application/json:
+        code: 200
+        msg: 同步完成：新增1条，更新9条
+        data:
+          project_id: 1
+          project_name: test_demo
+          scanned_count: 10
+          created_count: 1
+          updated_count: 9
+          ids: [1, 2]
+  404:
+    description: 缺少项目id、项目不存在或项目下没有pytest脚本
+    examples:
+      application/json:
+        code: 404
+        msg: 项目不存在
+        data:

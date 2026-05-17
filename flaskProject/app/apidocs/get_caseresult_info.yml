@@ -1,0 +1,36 @@
+tags:
+  - 获取测试集合最新执行结果
+description:
+    flasgger进行在线文档生成，获取测试集合最新执行结果
+parameters:
+  - name: body
+    in: body
+    required: true
+    schema:
+      id: 7
+      properties:
+        case_title:
+          type: string
+          description: 用例名
+        set_id:
+          type: integer
+          description: 测试集id
+        run_id:
+          type: integer
+          description: 运行唯一id
+        run_case_result:
+          type: string
+          description: 脚本测试结果
+        page:
+          type: integer
+          description: 分页页数
+        page_size:
+          type: integer
+          description: 分页大小
+responses:
+  200:
+     description: 获取测试集合最新执行结果成功
+     example:
+  404:
+     description: 获取测试集合最新执行结果失败
+     example:
