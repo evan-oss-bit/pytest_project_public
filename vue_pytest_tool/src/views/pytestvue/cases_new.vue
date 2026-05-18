@@ -35,7 +35,7 @@
                         <el-button @click="handleAddEvent" type="primary" icon="el-icon-refresh">扫描新增用例</el-button>
                         <el-button @click="handleAddEvent2" type="success" icon="el-icon-plus">添加到测试集</el-button>
                         <el-button type="primary" icon="el-icon-download"
-                            @click="handleExport('导出', '#exportTab', { raw: true })">导出当前页</el-button>
+                            @click="handleExport('', '#exportTab', { raw: true })">导出当前页</el-button>
                     </div>
                     <div class="case-action-right">
                         <label class="case-upload-picker">
@@ -763,6 +763,26 @@ export default {
             }
             this.getConfigList();
         },
+        getExportTime() {
+            return this.$moment ? this.$moment().format("YYYYMMDD_HHmmss") : this.FormatTime("yyyyMMdd_HHmmss");
+        },
+        normalizeExportPart(value) {
+            return String(value || "")
+                .trim()
+                .replace(/[\\/:*?"<>|\s]+/g, "_")
+                .replace(/^_+|_+$/g, "");
+        },
+        buildExportFileName(fileName = "") {
+            let parts = [fileName || "用例脚本列表"];
+            if (this.filters.cfg_name) {
+                parts.push(this.filters.cfg_name);
+            }
+            if (this.previous_level) {
+                parts.push(Array.isArray(this.previous_level) ? this.previous_level.join("_") : this.previous_level);
+            }
+            parts.push(this.getExportTime());
+            return parts.map(this.normalizeExportPart).filter(Boolean).join("_");
+        },
         //fileName 导出文件名；idName 导出table的id；xlsxParam 导出配置
         handleExport(fileName = '', idName = "#exportTab", xlsxParam = { raw: true }) {
             // let xlsxParam = { raw: true }; // 导出的内容只做解析，不进行格式转换
@@ -778,7 +798,7 @@ export default {
             try {
                 FileSaver.saveAs(
                     new Blob([wbout], { type: "application/octet-stream" }),
-                    `${fileName}用例脚本列表.xlsx`
+                    `${this.buildExportFileName(fileName)}.xlsx`
                 );
             } catch (e) {
                 if (typeof console !== "undefined") {

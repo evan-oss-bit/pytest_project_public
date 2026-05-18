@@ -8,7 +8,7 @@
                         <div class="block" style="">
                             <span class="demonstration"></span>
                             <el-cascader :filterable="true" :clearable="true" :disabled="false"
-                                placeholder="请选择关联脚本项目(也可输入项目搜索)" separator="=>" v-model="addForm.value"
+                                placeholder="请选择关联脚本项目(也可输入项目搜索)" separator="=>" v-model="filterProjectValue"
                                 :options="addForm.options" :props="{ expandTrigger: 'hover' }"></el-cascader>
                         </div>
                     </el-form-item>
@@ -25,6 +25,10 @@
                         <el-button type="primary" icon="el-icon-search" v-on:click="getConfigList">查询</el-button>
                     </el-form-item>
                     <div>
+                        <el-form-item>
+                            <el-button @click="handleCreateTestset" type="success" icon="el-icon-plus"
+                                style="float: right; text-align: right; margin-left: 10px">新建测试集</el-button>
+                        </el-form-item>
                         <el-form-item>
                             <el-button @click="stop_set" type="danger"
                                 style="float: right; text-align: right; margin-left: 10px">批量终止测试集</el-button>
@@ -442,7 +446,7 @@
             <el-form :model="addForm" label-width="150px" :rules="detailFormRules" ref="addForm">
             <el-form-item label="提示信息:">
                 <span>
-                    <pre>名称为用例数+用例名+所属项目名</pre>
+                    <pre>先选择脚本项目，再从左侧用例列表中选择需要加入测试集的用例</pre>
                 </span>
             </el-form-item>
             <el-form-item label="测试集名称:">
@@ -450,6 +454,29 @@
                 <i slot="prefix" class="el-input__icon el-icon-search"></i>
             </el-input>
            </el-form-item>
+            <el-row>
+                <el-col :span="9">
+                    <el-form-item label="关联脚本项目" class="len_input" required>
+                        <div class="block" style="">
+                            <span class="demonstration"></span>
+                            <el-select v-if="isCreateSet" v-model="createProjectId" filterable clearable
+                                placeholder="请选择关联脚本项目(也可输入项目搜索)" @change="handleCreateProjectChange">
+                                <el-option
+                                    v-for="item in addForm.options"
+                                    :key="item.value"
+                                    :label="item.label"
+                                    :value="item.value">
+                                </el-option>
+                            </el-select>
+                            <el-cascader v-else :filterable="true" :clearable="true" :disabled="true"
+                                placeholder="请选择关联脚本项目(也可输入项目搜索)" separator="=>" v-model="addForm.value"
+                                :options="addForm.options" :props="{ expandTrigger: 'hover' }"></el-cascader>
+                        </div>
+                    </el-form-item>
+                </el-col>
+                <el-col :span="9">
+                </el-col>
+            </el-row>
            <!-- <el-row>
                 <el-col :span="9">
                     <el-form-item label="关联配置:" class="len_input">
@@ -592,6 +619,8 @@ export default {
             datevalue2: "",
             deadline2: '11111111111111',
             runset_title: "运行测试集",
+            isCreateSet: false,
+            createProjectId: null,
             set_title: '',
             pros_value: '',
             sent_email:0,
@@ -689,6 +718,7 @@ export default {
             filters: {
                 cfg_name: "",
             },
+            filterProjectValue: [],
             install_type_lst: [],
             addViperHost: "",
             aioLst: [],
@@ -892,6 +922,26 @@ export default {
         },
         handleChange(value, direction, movedKeys) {
         },
+        projectIdFromValue(value) {
+            if (Array.isArray(value)) {
+                return value.length ? value[0] : null;
+            }
+            return value || null;
+        },
+        parseIdList(value) {
+            if (Array.isArray(value)) {
+                return value;
+            }
+            if (value === null || value === undefined || value === "" || value === "None") {
+                return [];
+            }
+            try {
+                const parsed = JSON.parse(value);
+                return Array.isArray(parsed) ? parsed : [];
+            } catch (e) {
+                return [];
+            }
+        },
         cellStyle({ row, column, rowIndex, columnIndex }) {
             let cell_Style
             switch (row.run_status) {
@@ -956,7 +1006,7 @@ export default {
             this.ongoing = false;
             let para = {
                 run_status: this.value2,
-                project_id: this.addForm.value[0],
+                project_id: this.projectIdFromValue(this.filterProjectValue),
                 title: this.filters.cfg_name,
                 page: this.page,
                 page_size: this.page_size,
@@ -967,6 +1017,82 @@ export default {
                 this.listLoading = false;
                 this.total = res.data.data.length;
             });
+        },
+        async handleCreateTestset() {
+            this.isCreateSet = true;
+            this.EditSetVisible = true;
+            this.runset_title = "新建测试集";
+            this.set_title = "";
+            this.addForm.config_id = null;
+            this.addForm.mark = "";
+            this.createProjectId = this.projectIdFromValue(this.filterProjectValue);
+            this.addForm.value = this.createProjectId ? [this.createProjectId] : [];
+            this.addForm.value2 = [];
+            this.addForm.value3 = [];
+            this.addForm.email_to = "";
+            this.priority_value = 0;
+            this.value4 = [];
+            this.case_data = [];
+            this.CaseList = [];
+            this.setcasetotal = 0;
+            await this.getproinfo();
+            await this.getversioninfo();
+            await this.getmoduleinfo();
+            if (this.createProjectId) {
+                await this.loadTransferCases(this.createProjectId);
+            }
+        },
+        async handleCreateProjectChange(value) {
+            if (!this.isCreateSet) {
+                return;
+            }
+            const projectId = this.projectIdFromValue(value);
+            this.createProjectId = projectId;
+            this.addForm.value = projectId ? [projectId] : [];
+            this.value4 = [];
+            this.case_data = [];
+            this.CaseList = [];
+            this.setcasetotal = 0;
+            if (projectId) {
+                await this.loadTransferCases(projectId);
+            }
+        },
+        async loadTransferCases(projectId, selectedCaseIds) {
+            let para = {
+                page: 0,
+                page_size: 10000,
+                project_id: projectId,
+                script_type: this.value
+            };
+            this.listLoading = true;
+            await get_cases_info(para).then((res) => {
+                this.CaseList = res.data.data || [];
+                this.setcasetotal = this.CaseList.length;
+                this.case_data = [];
+                for (let i = 0; i < this.CaseList.length; i++) {
+                    this.case_data.push({
+                        key: this.CaseList[i].id,
+                        label: this.CaseList[i].case_count + "-" + this.CaseList[i].case_name + "-" + this.CaseList[i].project_name,
+                        disabled: false,
+                        subscript: i,
+                        case_count: this.CaseList[i].case_count,
+                        run_status: this.CaseList[i].run_status
+                    });
+                }
+                this.listLoading = false;
+                if (this.isCreateSet && this.CaseList.length === 0) {
+                    this.$message({
+                        message: "当前脚本项目暂无可选用例，请先扫描/同步脚本",
+                        type: "warning",
+                        duration: 5000
+                    });
+                }
+            }).catch(() => {
+                this.listLoading = false;
+            });
+            if (selectedCaseIds) {
+                this.value4 = selectedCaseIds;
+            }
         },
         //获取用例列表
         async getCaseList(index, row) {
@@ -1110,7 +1236,7 @@ export default {
                 let para = {
                     module: this.addForm.config_name,
                     project_name: this.addForm.cfg,
-                    project_id: this.addForm.value[0],
+                    project_id: this.projectIdFromValue(this.addForm.value),
                     version_id: this.addForm.value2[0],
                     cfg_id: this.addForm.value3,
                     id: this.addForm.config_id,
@@ -1264,11 +1390,11 @@ export default {
             // this.addForm.sltFlagLst = ["os", "business", "connect", "play"];
             this.addForm.options = [];
             this.priority_value = row.priority;
-            this.addForm.value = row.project_id;
+            this.addForm.value = [row.project_id];
             this.addForm.options2 = [];
             this.addForm.value2 = [row.version_id];
             this.addForm.options3 = [];
-            this.addForm.value3 = JSON.parse(row.config);
+            this.addForm.value3 = this.parseIdList(row.config);
             // this.addForm.value3 = [row.config];
             this.addForm.mark = row.mark_info;
             this.detailFormVisible = true;
@@ -1292,11 +1418,11 @@ export default {
             // this.addForm.sltFlagLst = ["os", "business", "connect", "play"];
             this.addForm.options = [];
             this.priority_value = row.priority;
-            this.addForm.value = row.project_id;
+            this.addForm.value = [row.project_id];
             this.addForm.options2 = [];
             this.addForm.value2 = [row.version_id];
             this.addForm.options3 = [];
-            this.addForm.value3 = JSON.parse(row.config);
+            this.addForm.value3 = this.parseIdList(row.config);
             // this.addForm.value3 = [row.config];
             this.addForm.mark = row.mark_info;
             this.detailFormVisible = true;
@@ -1325,16 +1451,17 @@ export default {
         },
         //修改测试集用例
         async handleEditEvent(index, row) {
+            this.isCreateSet = false;
             this.addForm.set_time = new Date();
             this.EditSetVisible = true;
             this.runset_title = "修改所属项目[" + row.project_name + "]测试集[" + row.title + "]";
             this.addForm.config_id = row.id;
             this.set_title = row.title;
             this.addForm.mark = row.mark_info;
-            this.addForm.value = row.project_id;
+            this.addForm.value = [row.project_id];
             this.priority_value = row.priority;
             // this.addForm.value3 = [row.config];
-            this.addForm.value3 = JSON.parse(row.config);
+            this.addForm.value3 = this.parseIdList(row.config);
             this.addForm.value2 = [row.version_id];
             this.addForm.email_to = row.email_to;
             this.case_data = [];
@@ -1343,29 +1470,7 @@ export default {
             await this.getConfigList();
             await this.getversioninfo()
             await this.getmoduleinfo()
-            let para = {
-                page: this.page,
-                page_size: 10000,
-                project_id: row.project_id
-            };
-            await get_cases_info(para).then((res) => {
-                this.CaseList = res.data.data;
-                this.setcasetotal = res.data.data.length
-                for (let i = 0; i < this.CaseList.length; i++) {
-                    this.case_data.push(
-                        {
-                            key: this.CaseList[i].id,
-                            label: this.CaseList[i].case_count+ "-" + this.CaseList[i].case_name + "-" + this.CaseList[i].project_name,
-                            disabled: false,
-                            subscript: i,
-                            case_count: this.CaseList[i].case_count,
-                            run_status: this.CaseList[i].run_status
-                        }
-                    )
-                }
-
-
-            });
+            await this.loadTransferCases(row.project_id);
             let para2 = {
                 page: this.page,
                 page_size: this.page_size,
@@ -1392,7 +1497,7 @@ export default {
                 case_name: this.filters.cfg_name,
                 page: this.page,
                 page_size: this.page_size,
-                project_id: this.addForm.value[0],
+                project_id: this.projectIdFromValue(this.addForm.value),
                 script_type: this.value
             };
             this.listLoading = true;
@@ -1404,10 +1509,19 @@ export default {
         },
         async add_set() {
             // this.ongoing = false;
+            const projectId = this.isCreateSet ? this.createProjectId : this.projectIdFromValue(this.addForm.value);
+            if (!projectId) {
+                this.$message({
+                    message: "请先选择关联脚本项目",
+                    type: "warning",
+                    duration: 5000
+                });
+                return;
+            }
             let para = {
                 case_ids: this.value4,
                 testset_title: this.set_title,
-                project_id: this.addForm.value,
+                project_id: projectId,
                 set_id: this.addForm.config_id,
                 mark:this.addForm.mark,
                 config_id: this.addForm.value3,
@@ -1713,8 +1827,10 @@ export default {
         selsChange: function (sels) {
             this.sels = sels;
             this.setids = [];
-            for (let setid in this.sels) {
-                this.setids.push(this.sels[setid]["id"])
+            this.caseids = [];
+            for (let item in this.sels) {
+                this.setids.push(this.sels[item]["id"])
+                this.caseids.push(this.sels[item]["id"])
             }
 
         },

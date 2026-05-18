@@ -8,7 +8,7 @@
                         <div class="block" style="">
                             <span class="demonstration"></span>
                             <el-cascader :filterable="true" :clearable="true" :disabled="false"
-                                placeholder="请选择关联脚本项目(也可输入项目搜索)" separator="=>" v-model="addForm.value"
+                                placeholder="请选择关联脚本项目(也可输入项目搜索)" separator="=>" v-model="filterProjectValue"
                                 :options="addForm.options" :props="{ expandTrigger: 'hover' }"></el-cascader>
                         </div>
                     </el-form-item>
@@ -133,6 +133,7 @@ export default {
       filters: {
         cfg_name: "",
       },
+      filterProjectValue: [],
       install_type_lst: [],
       addViperHost: "",
       aioLst: [],
@@ -161,7 +162,7 @@ export default {
         node_randio: 1,
         auth: false,
 
-        value: "",
+        value: [],
         options: [],
         set_time: "",
         note: "",
@@ -194,11 +195,17 @@ export default {
       this.page = val;
       this.getConfigList();
     },
+    projectIdFromValue(value) {
+      if (Array.isArray(value)) {
+        return value.length ? value[0] : null;
+      }
+      return value || null;
+    },
     //获取配置列表
     async getConfigList() {
       this.ongoing = false;
       let para = {
-        project_id:this.addForm.value[0],
+        project_id: this.projectIdFromValue(this.filterProjectValue),
         version: this.filters.cfg_name,
         page: this.page,
         page_size: this.page_size,
@@ -234,7 +241,7 @@ export default {
         let para = {
           version: this.addForm.config_name,
           changelog: this.addForm.cfg,
-          project_id: this.addForm.value,
+          project_id: this.projectIdFromValue(this.addForm.value),
           id: this.addForm.config_id
         };
 
@@ -372,7 +379,7 @@ export default {
       this.addForm.set_time = new Date();
       this.addForm.sltFlagLst = ["os", "business", "connect", "play"];
       this.addForm.options = [];
-      this.addForm.value = null;
+      this.addForm.value = [];
       this.detailFormVisible = true;
       this.addForm.add_data = true;
       this.addForm.config_id = null;
@@ -384,7 +391,7 @@ export default {
       this.addForm.config_id = row.id
       this.addForm.config_name = row.version;
       this.detailFormVisible = true;
-      this.addForm.value = row.project_id;
+      this.addForm.value = row.project_id ? [row.project_id] : [];
       this.addForm.cfg = row.changelog;
       await this.getproinfo();
 

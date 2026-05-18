@@ -52,7 +52,7 @@
                         <el-button type="primary" icon="el-icon-search" v-on:click="getConfigList">查询</el-button>
                     </el-form-item>
 
-                    <el-button type="primary" @click="handleExport('导出', '#exportTab', { raw: true })">导出当前页面数据</el-button>
+                    <el-button type="primary" @click="handleExport('', '#exportTab', { raw: true })">导出当前页面数据</el-button>
 
                     <template>
                         <el-table :data="count_info" style="width: 100%" :cell-style="cellStyle2">
@@ -563,6 +563,29 @@ export default {
                 this.total = res.data.data.length
             });
         },
+        getExportTime() {
+            return this.$moment ? this.$moment().format("YYYYMMDD_HHmmss") : this.FormatTime("yyyyMMdd_HHmmss");
+        },
+        normalizeExportPart(value) {
+            return String(value || "")
+                .trim()
+                .replace(/[\\/:*?"<>|\s]+/g, "_")
+                .replace(/^_+|_+$/g, "");
+        },
+        buildExportFileName(fileName = "") {
+            let parts = [fileName || "用例执行结果"];
+            if (this.filters.run_id) {
+                parts.push("run_" + this.filters.run_id);
+            }
+            if (this.value2) {
+                parts.push(this.value2);
+            }
+            if (this.filters.cfg_name) {
+                parts.push(this.filters.cfg_name);
+            }
+            parts.push(this.getExportTime());
+            return parts.map(this.normalizeExportPart).filter(Boolean).join("_");
+        },
         //fileName 导出文件名；idName 导出table的id；xlsxParam 导出配置
         handleExport(fileName = '', idName = "#exportTab", xlsxParam = { raw: true }) {
             // let xlsxParam = { raw: true }; // 导出的内容只做解析，不进行格式转换
@@ -578,7 +601,7 @@ export default {
             try {
                 FileSaver.saveAs(
                     new Blob([wbout], { type: "application/octet-stream" }),
-                    `${fileName}用例执行结果.xlsx`
+                    `${this.buildExportFileName(fileName)}.xlsx`
                 );
             } catch (e) {
                 if (typeof console !== "undefined") {

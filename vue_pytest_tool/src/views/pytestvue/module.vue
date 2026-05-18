@@ -8,7 +8,7 @@
                         <div class="block" style="">
                             <span class="demonstration"></span>
                             <el-cascader :filterable="true" :clearable="true" :disabled="false"
-                                placeholder="请选择关联脚本项目(也可输入项目搜索)" separator="=>" v-model="addForm.value"
+                                placeholder="请选择关联脚本项目(也可输入项目搜索)" separator="=>" v-model="filterProjectValue"
                                 :options="addForm.options" :props="{ expandTrigger: 'hover' }"></el-cascader>
                         </div>
                     </el-form-item>
@@ -16,7 +16,7 @@
                         <div class="block" style="">
                             <span class="demonstration"></span>
                             <el-cascader :filterable="true" :clearable="true" :disabled="false"
-                                placeholder="请选择关联版本号(也可输入版本号搜索)" separator="=>" v-model="addForm.value2"
+                                placeholder="请选择关联版本号(也可输入版本号搜索)" separator="=>" v-model="filterVersionValue"
                                 :options="addForm.options2" :props="{ expandTrigger: 'hover' }"></el-cascader>
                         </div>
                     </el-form-item>
@@ -158,6 +158,8 @@ export default {
       filters: {
         cfg_name: "",
       },
+      filterProjectValue: [],
+      filterVersionValue: [],
       install_type_lst: [],
       addViperHost: "",
       aioLst: [],
@@ -186,9 +188,9 @@ export default {
         node_randio: 1,
         auth: false,
 
-        value: "",
+        value: [],
         options: [],
-        value2: "",
+        value2: [],
         options2: [],
         set_time: "",
         note: "",
@@ -221,12 +223,18 @@ export default {
       this.page = val;
       this.getConfigList();
     },
+    cascaderIdFromValue(value) {
+      if (Array.isArray(value)) {
+        return value.length ? value[0] : null;
+      }
+      return value || null;
+    },
     //获取配置列表
     async getConfigList() {
       this.ongoing = false;
       let para = {
-        project_id:this.addForm.value[0],
-        version_id:this.addForm.value2[0],
+        project_id: this.cascaderIdFromValue(this.filterProjectValue),
+        version_id: this.cascaderIdFromValue(this.filterVersionValue),
         module: this.filters.cfg_name,
         page: this.page,
         page_size: this.page_size,
@@ -262,8 +270,8 @@ export default {
         let para = {
           module: this.addForm.config_name,
           description: this.addForm.cfg,
-          project_id: this.addForm.value,
-          version_id: this.addForm.value2,
+          project_id: this.cascaderIdFromValue(this.addForm.value),
+          version_id: this.cascaderIdFromValue(this.addForm.value2),
           id: this.addForm.config_id
         };
 
@@ -401,9 +409,9 @@ export default {
     async handleAddEvent() {
       this.addForm.set_time = new Date();
       this.addForm.options = [];
-      this.addForm.value = null;
+      this.addForm.value = [];
       this.addForm.options2 = [];
-      this.addForm.value2 = null;
+      this.addForm.value2 = [];
       this.detailFormVisible = true;
       this.addForm.add_data = true;
       this.addForm.config_id = null
@@ -417,8 +425,8 @@ export default {
       this.detailFormVisible = true;
       this.addForm.config_name = row.module;
       this.addForm.cfg = row.description;
-      this.addForm.value = row.project_id;
-      this.addForm.value2 = row.version_id;
+      this.addForm.value = row.project_id ? [row.project_id] : [];
+      this.addForm.value2 = row.version_id ? [row.version_id] : [];
       await this.getproinfo();
       await this.getversioninfo()
 

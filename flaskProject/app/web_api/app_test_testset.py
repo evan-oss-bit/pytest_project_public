@@ -19,13 +19,11 @@ from config import logs
 from app.lib import image
 from app.tools import request_details
 from app.tools import sched_task
-from app.tools import cache_operatios
 import os
 import psutil
 from time import strftime as strf_time
 from time import gmtime
 import signal
-import json
 import yagmail
 from app.tools.util import EmailThread
 from app.tools.auth_permissions import (
@@ -324,10 +322,10 @@ def add_testset():
         testset_info.priority = priority_value
         return_dict = {'code': 200, 'msg': f'修改{testset_title}测试集成功', 'data': testset_id}
     else:
-        new_testset = TestSet(config=config_id, title=testset_title, case_ids=str(case_ids), project_id=project_id,
+        new_testset = TestSet(config=str(config_id), title=testset_title, case_ids=str(case_ids), project_id=project_id,
                               version_id=version_id, modify_count=0, mark=0, fixed_cc=0, run_status=0,
                               project_name=project_info.name, previous_level=previous_level, mark_info=mark,
-                              priority=priority_value,
+                              priority=priority_value, email_to=email_to,
                               type=script_type)
         db.session.add(new_testset)
         db.session.flush()
@@ -632,27 +630,12 @@ def get_report_info():
     page_no = request.json.get("page", 0)
     page_size = request.json.get("page_size", 10)
     project_id = request.json.get("project_id")
-    all_report_data = "all_report_data"
     allowed_ids = allowed_project_ids()
     if project_id:
         permission_error = require_project_permission(project_id, "view")
         if permission_error:
             return permission_error
     try:
-        if allowed_ids is None and page_size and not set_id and not title and not project_id and not run_id:
-            return_dict = cache_operatios.new_conn.get(all_report_data)
-            if return_dict:
-                print("获取报告缓存数据")
-                return_dict = json.loads(return_dict)
-                return_dict.update({"cache_msg": "这是直接从redis缓存中获取的数据"})
-                return return_dict
-        if allowed_ids is None and project_id and page_size and not set_id and not title:
-            return_dict = cache_operatios.new_conn.get(str(project_id))
-            if return_dict:
-                print("获取报告缓存数据")
-                return_dict = json.loads(return_dict)
-                return_dict.update({"cache_msg": "这是直接从redis缓存中获取的数据"})
-                return return_dict
         if set_id:
             if title:
                 query = Reports.query.filter_by(set_id=set_id).filter(Reports.title.like(f"%{title}%")).order_by(
@@ -734,14 +717,6 @@ def get_report_info():
             if i.get("updated_time"):
                 i.update({"updated_time": i.get("updated_time").strftime("%Y-%m-%d %H:%M:%S")})
         return_dict = {'code': 200, 'msg': '请求成功', 'data': query}
-        if allowed_ids is None and page_size and not set_id and not title and not project_id and not run_id:
-            cache_dict = json.dumps(return_dict, cls=cache_operatios.DecimalEncoder)
-            cache_operatios.new_conn.set(all_report_data, cache_dict, ex=60 * 1)
-            print("存储报告缓存数据")
-        if allowed_ids is None and project_id and page_size and not set_id and not title:
-            cache_dict = json.dumps(return_dict, cls=cache_operatios.DecimalEncoder)
-            cache_operatios.new_conn.set(str(project_id), cache_dict, ex=60 * 5)
-            print("存储关联项目报告缓存数据")
         return jsonify(return_dict)
     except Exception as e:
         print(traceback.print_exc())
@@ -764,7 +739,7 @@ def report_mark():
         return permission_error
     query.mark = mark
     db.session.commit()
-    return {'code': 200, 'msg': '请求成功！备注修改不是实时更新，请等待缓存更新', 'data': None}
+    return {'code': 200, 'msg': '请求成功！', 'data': None}
 
 
 @testset.route('/send_email', methods=["POST"])
