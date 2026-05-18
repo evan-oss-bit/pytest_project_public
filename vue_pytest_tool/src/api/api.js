@@ -38,6 +38,10 @@ export const delete_account = (params) => {
 export const reset_account_password = (params) => {
   return axios.post(`${base}/auth/reset_account_password`, params);
 };
+//账号权限-操作日志
+export const get_operation_log = (params) => {
+  return axios.post(`${base}/auth/get_operation_log`, params);
+};
 
 //pytest自动化项目-获取项目信息
 export const get_project_info = (params) => {

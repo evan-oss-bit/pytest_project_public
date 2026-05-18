@@ -97,7 +97,7 @@
                         </el-tag>
                         </template>
                     </el-table-column>
-                    <el-table-column label="操作">
+                <el-table-column label="操作" width="120" fixed="right">
                     <template slot-scope="scope">
                         <el-row>
                             <el-dropdown split-button type="primary" @click="get_html(scope.$index, scope.row)"
@@ -408,6 +408,7 @@ export default {
                 { prop: "project_name", label: "脚本项目", width: 100 },
                 { prop: "duration", label: "用例耗时/s", width: 100 },
                 { prop: "run_id", label: "运行唯一id", width: 180 },
+                { prop: "run_by_name", label: "执行人", width: 100 },
                 { prop: "updated_time", label: "更新时间", width: 180 },
                 // { prop: "set_id", label: "测试集id", width: 100 },
                 // { prop: "config_id", label: "配置id", width: 90 },
@@ -1027,5 +1028,6 @@ export default {
 .el-table div.cell {
     white-space: pre-line;
 }
+
 </style>
     

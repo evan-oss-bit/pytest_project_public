@@ -58,6 +58,28 @@ class AccountProject(Base, BaseMixin):
     )
 
 
+class OperationLog(Base, BaseMixin):
+    """ç³»ç»Ÿå…³é”®æ“ä½œæ—¥å¿—è¡¨"""
+    __tablename__ = 'operation_log'
+    user_id = db.Column(db.Integer, nullable=True, index=True)
+    username = db.Column(db.String(191), nullable=True, index=True)
+    action = db.Column(db.String(80), nullable=True, index=True)
+    action_name = db.Column(db.String(191), nullable=True)
+    target_type = db.Column(db.String(80), nullable=True, index=True)
+    target_id = db.Column(db.String(191), nullable=True, index=True)
+    target_name = db.Column(db.String(500), nullable=True)
+    method = db.Column(db.String(20), nullable=True)
+    path = db.Column(db.String(500), nullable=True, index=True)
+    status_code = db.Column(db.Integer, nullable=True)
+    result_code = db.Column(db.Integer, nullable=True)
+    result_msg = db.Column(db.String(1000), nullable=True)
+    before_data = db.Column(db.TEXT(65533), nullable=True)
+    after_data = db.Column(db.TEXT(65533), nullable=True)
+    request_data = db.Column(db.TEXT(65533), nullable=True)
+    response_data = db.Column(db.TEXT(65533), nullable=True)
+    ip = db.Column(db.String(80), nullable=True)
+
+
 class Test_Module(Base, BaseMixin):
     """测试模块表"""
     __tablename__ = 'test_module'

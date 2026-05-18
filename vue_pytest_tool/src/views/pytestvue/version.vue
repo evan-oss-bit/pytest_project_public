@@ -177,6 +177,8 @@ export default {
         { prop: "changelog", label: "备注", width: 500 },
         // { prop: "project_id", label: "脚本项目id", width: 130 },
         { prop: "project_name", label: "脚本项目名称", width: 130 },
+        { prop: "created_by_name", label: "创建人", width: 100 },
+        { prop: "updated_by_name", label: "更新人", width: 100 },
         { prop: "created_time", label: "创建时间", width: 185 },
         { prop: "updated_time", label: "更新时间", width: 200 },
       ],

@@ -15,6 +15,8 @@ from flasgger import Swagger
 from conf.swag_conf import swagger_config
 from flask_sock import Sock
 from app.tools.auth_permissions import require_login, seed_admin
+from app.tools.audit_fields import ensure_audit_columns
+from app.tools.operation_log import record_operation_log
 
 
 class Config(object):
@@ -61,6 +63,7 @@ def create_app(register_blueprint=True):
             # 删表
             # db.drop_all()
             db.create_all()
+            ensure_audit_columns()
             seed_admin(db)
 
         # app.config.from_object(cache_config)
@@ -85,4 +88,8 @@ def create_app(register_blueprint=True):
             if request.path.startswith(public_prefixes):
                 return None
             return require_login()
+
+        @app.after_request
+        def operation_log_guard(response):
+            return record_operation_log(response)
     return app

@@ -35,6 +35,8 @@
           </template>
         </el-table-column>
         <el-table-column prop="description" label="备注" min-width="260" show-overflow-tooltip></el-table-column>
+        <el-table-column prop="created_by_name" label="创建人" width="100"></el-table-column>
+        <el-table-column prop="updated_by_name" label="更新人" width="100"></el-table-column>
         <el-table-column prop="updated_time" label="更新时间" width="180"></el-table-column>
         <el-table-column label="操作" width="240" fixed="right">
           <template slot-scope="scope">
@@ -83,6 +85,8 @@
               <span class="metric-chip">报告 {{ scope.row.report_count || 0 }}</span>
             </template>
           </el-table-column>
+          <el-table-column prop="created_by_name" label="创建人" width="100"></el-table-column>
+          <el-table-column prop="updated_by_name" label="更新人" width="100"></el-table-column>
           <el-table-column prop="updated_time" label="更新时间" width="180"></el-table-column>
         </el-table>
       </div>

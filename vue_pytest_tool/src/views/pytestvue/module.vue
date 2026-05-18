@@ -205,6 +205,8 @@ export default {
         { prop: "description", label: "备注信息", width: 600 },
         { prop: "project_name", label: "脚本项目名", width: 130 },
         { prop: "version_name", label: "版本号", width: 130 },
+        { prop: "created_by_name", label: "创建人", width: 100 },
+        { prop: "updated_by_name", label: "更新人", width: 100 },
         { prop: "created_time", label: "创建时间", width: 185 },
         { prop: "updated_time", label: "更新时间", width: 200 },
       ],

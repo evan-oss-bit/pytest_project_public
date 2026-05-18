@@ -33,6 +33,7 @@ from app.tools.auth_permissions import (
     project_id_from_testset,
     require_project_permission,
 )
+from app.tools.audit_fields import apply_run_user
 from sqlalchemy import func
 
 # workers = multiprocessing.cpu_count() * 2
@@ -426,6 +427,7 @@ def run_testset():
         query.run_id = run_id_num
         query.run_status = 1
         query.schedule = 0
+        apply_run_user(query)
         if timed_task_time:
             query.timed_task_time = timed_task_time
             query.run_type = "定时任务"

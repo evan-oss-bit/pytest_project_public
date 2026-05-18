@@ -90,6 +90,14 @@
             </div>
           </template>
         </el-table-column>
+        <el-table-column label="操作人" width="160">
+          <template slot-scope="scope">
+            <div class="config-time">
+              <div><span>创建：</span>{{ scope.row.created_by_name || "-" }}</div>
+              <div><span>更新：</span>{{ scope.row.updated_by_name || "-" }}</div>
+            </div>
+          </template>
+        </el-table-column>
         <el-table-column label="操作" width="220" fixed="right">
           <template slot-scope="scope">
             <el-row class="config-actions">

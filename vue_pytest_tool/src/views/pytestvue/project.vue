@@ -179,6 +179,14 @@
             </div>
           </template>
         </el-table-column>
+        <el-table-column label="操作人" width="160">
+          <template slot-scope="scope">
+            <div class="time-cell">
+              <div>创建：{{ scope.row.created_by_name || "-" }}</div>
+              <div class="muted-text">更新：{{ scope.row.updated_by_name || "-" }}</div>
+            </div>
+          </template>
+        </el-table-column>
         <el-table-column label="快捷操作" width="150" fixed="right">
           <template slot-scope="scope">
             <el-dropdown split-button type="primary" size="mini" trigger="click" @click="openProjectDashboard(scope.row)">
@@ -230,6 +238,8 @@
           </template>
         </el-table-column>
         <el-table-column prop="description" label="备注" min-width="180" show-overflow-tooltip></el-table-column>
+        <el-table-column prop="created_by_name" label="创建人" width="100"></el-table-column>
+        <el-table-column prop="updated_by_name" label="更新人" width="100"></el-table-column>
         <el-table-column label="操作" width="220" fixed="right">
           <template slot-scope="scope">
             <el-button size="mini" @click="openDepartmentDashboard(scope.row)">总览</el-button>
@@ -512,6 +522,7 @@
               <el-table :data="projectDashboard.recent_reports" height="260" size="mini">
                 <el-table-column prop="title" label="报告" min-width="180"></el-table-column>
                 <el-table-column prop="run_id" label="run_id" width="130"></el-table-column>
+                <el-table-column prop="run_by_name" label="执行人" width="90"></el-table-column>
                 <el-table-column label="通过率" width="90">
                   <template slot-scope="scope">{{ formatPassRate(scope.row.pass_rate) }}</template>
                 </el-table-column>
@@ -530,6 +541,7 @@
                 <el-table-column prop="title" label="测试集" min-width="160"></el-table-column>
                 <el-table-column prop="schedule" label="进度" width="80"></el-table-column>
                 <el-table-column prop="run_id" label="run_id" width="130"></el-table-column>
+                <el-table-column prop="run_by_name" label="执行人" width="90"></el-table-column>
               </el-table>
             </el-card>
           </el-col>
@@ -698,6 +710,8 @@
               <el-table-column prop="title" label="脚本标题" min-width="180"></el-table-column>
               <el-table-column prop="relative_path" label="路径" min-width="260"></el-table-column>
               <el-table-column prop="run_status" label="状态" width="100"></el-table-column>
+              <el-table-column prop="updated_by_name" label="更新人" width="90"></el-table-column>
+              <el-table-column prop="run_by_name" label="执行人" width="90"></el-table-column>
               <el-table-column prop="updated_time" label="更新时间" width="160"></el-table-column>
             </el-table>
           </el-tab-pane>
@@ -707,6 +721,8 @@
               <el-table-column prop="schedule" label="进度" width="90"></el-table-column>
               <el-table-column prop="run_status" label="状态" width="90"></el-table-column>
               <el-table-column prop="run_id" label="run_id" width="140"></el-table-column>
+              <el-table-column prop="updated_by_name" label="更新人" width="90"></el-table-column>
+              <el-table-column prop="run_by_name" label="执行人" width="90"></el-table-column>
               <el-table-column prop="updated_time" label="更新时间" width="160"></el-table-column>
             </el-table>
           </el-tab-pane>
@@ -717,6 +733,8 @@
               <el-table-column prop="schedule" label="进度" width="90"></el-table-column>
               <el-table-column prop="run_status" label="状态" width="90"></el-table-column>
               <el-table-column prop="run_id" label="run_id" width="140"></el-table-column>
+              <el-table-column prop="updated_by_name" label="更新人" width="90"></el-table-column>
+              <el-table-column prop="run_by_name" label="执行人" width="90"></el-table-column>
               <el-table-column prop="updated_time" label="更新时间" width="160"></el-table-column>
             </el-table>
           </el-tab-pane>
@@ -725,6 +743,7 @@
               <el-table-column prop="title" label="报告" min-width="180"></el-table-column>
               <el-table-column prop="set_title" label="测试集" min-width="160"></el-table-column>
               <el-table-column prop="run_id" label="run_id" width="140"></el-table-column>
+              <el-table-column prop="run_by_name" label="执行人" width="90"></el-table-column>
               <el-table-column label="通过率" width="90">
                 <template slot-scope="scope">{{ formatPassRate(scope.row.pass_rate) }}</template>
               </el-table-column>

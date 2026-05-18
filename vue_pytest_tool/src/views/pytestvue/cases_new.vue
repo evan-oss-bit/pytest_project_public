@@ -460,6 +460,9 @@ export default {
                 { prop: "case_count", label: "用例条数", width: 60 },
                 // { prop: "run_status", label: "运行状态", width: 100 },
                 { prop: "remark", label: "备注", width: 120 },
+                { prop: "created_by_name", label: "创建人", width: 100 },
+                { prop: "updated_by_name", label: "更新人", width: 100 },
+                { prop: "run_by_name", label: "执行人", width: 100 },
                 { prop: "created_time", label: "创建时间", width: 120 },
                 { prop: "updated_time", label: "更新时间", width: 120 },
             ],
@@ -479,6 +482,7 @@ export default {
                 { prop: "set_title", label: "测试集名称", width: 100 },
                 // { prop: "cfg_name", label: "配置名称", width: 100 },
                 { prop: "version", label: "版本号", width: 100 },
+                { prop: "run_by_name", label: "执行人", width: 100 },
                 { prop: "updated_time", label: "更新时间", width: 200 },
                 // { prop: "file_name", label: "日志", width: 150 },
                 

@@ -48,17 +48,34 @@
                 <!-- <el-table-column type="selection" width="2">
                 </el-table-column> -->
                 <el-table-column type="selection" width="55"> </el-table-column>
-                <el-table-column v-for="item in lstForm" :key="item.prop" :prop="item.prop" :label="item.label"
-                    :width="item.width" style="white-space: pre" sortable>
+                <el-table-column label="测试集信息" min-width="260" sortable prop="title">
+                    <template slot-scope="scope">
+                        <div class="testset-main-cell">
+                            <div class="testset-title">{{ scope.row.title }}</div>
+                            <div class="testset-sub">项目：{{ scope.row.project_name || "-" }}</div>
+                            <div class="testset-sub">run_id：{{ scope.row.run_id || "-" }}　用例：{{ scope.row.case_count_total || 0 }}</div>
+                        </div>
+                    </template>
                 </el-table-column>
-                <el-table-column label="进程数" width="95"><template slot-scope="scope">{{ scope.row.process_number}}</template></el-table-column>
-                <el-table-column label="定时任务倒计时（时:分:秒）" width="95"><template slot-scope="scope">{{ scope.row.countdown}}</template></el-table-column>
-                <el-table-column label="已测试时间（时:分:秒）" width="95"><template slot-scope="scope">{{ scope.row.run_task_time}}</template></el-table-column>
-                <!-- <el-table-column label="用例数量（条）" width="80"><template slot-scope="scope">{{ JSON.parse(scope.row.case_ids).length}}</template></el-table-column> -->
-                <el-table-column label="运行状态" width="100"><template slot-scope="scope">{{ scope.row.run_status | stateFmt
-                }}</template></el-table-column>
-                
-                <el-table-column label="测试进度"><template slot-scope="scope"><el-progress :percentage="percentagenum(scope.row)" :format="format"></el-progress></template></el-table-column>
+                <el-table-column label="执行状态" width="190">
+                    <template slot-scope="scope">
+                        <div class="testset-status-cell">
+                            <el-tag size="mini" :type="testsetStatusTag(scope.row.run_status)">{{ scope.row.run_status | stateFmt }}</el-tag>
+                            <span class="testset-sub">进程 {{ scope.row.process_number || 0 }}</span>
+                            <el-progress class="compact-progress" :percentage="percentagenum(scope.row)" :format="format"></el-progress>
+                        </div>
+                    </template>
+                </el-table-column>
+                <el-table-column label="时间" width="190">
+                    <template slot-scope="scope">
+                        <div class="testset-sub">更新：{{ scope.row.updated_time || "-" }}</div>
+                        <div class="testset-sub">已测：{{ scope.row.run_task_time || "-" }}</div>
+                        <div class="testset-sub" v-if="scope.row.countdown">倒计时：{{ scope.row.countdown }}</div>
+                        <div class="testset-sub" v-if="scope.row.timed_task_time">定时：{{ scope.row.timed_task_time }}</div>
+                    </template>
+                </el-table-column>
+                <el-table-column prop="audit_info" label="操作人" width="170" show-overflow-tooltip></el-table-column>
+                <el-table-column prop="mark_info" label="备注" min-width="110" show-overflow-tooltip></el-table-column>
                 <!-- <el-table-column label="任务优先级" width="65"><template slot-scope="scope">{{ scope.row.priority | PriorityFmt}}</template></el-table-column> -->
                 <!-- <el-table-column
           prop="num"
@@ -70,7 +87,7 @@
             <el-progress type="line" :percentage="(scope.row.num)/percent*100" :format="format_info(scope.row,scope.column)" color="#57DCDD" :text-inside="false" :stroke-width="12" />
           </template>
         </el-table-column> -->
-                <el-table-column label="操作">
+                <el-table-column label="操作" width="160" fixed="right">
                     <template slot-scope="scope">
                         <el-row>
                             <el-dropdown split-button type="primary" @click="handleAddEvent(scope.$index, scope.row)"
@@ -776,6 +793,7 @@ export default {
                 // { prop: "schedule", label: "测试进度（%）", width: 80 },
                 { prop: "updated_time", label: "更新时间", width: 175 },
                 { prop: "case_count_total", label: "用例数量（条）", width: 80 },
+                { prop: "audit_info", label: "操作人", width: 190 },
                 { prop: "mark_info", label: "备注", width: 100 },
                 { prop: "run_type", label: "运行方式", width: 80 },
                 { prop: "timed_task_time", label: "定时任务开启时间", width: 140 }
@@ -803,6 +821,7 @@ export default {
                 { prop: "title", label: "测试报告名（项目名_测试集名_运行id）", width: 300 },
                 { prop: "mark", label: "备注", width: 200 },
                 { prop: "case_all_time", label: "用例总耗时/s", width: 100 },
+                { prop: "run_by_name", label: "执行人", width: 100 },
                 { prop: "all_count", label: "全部用例数", width: 100 },
                 { prop: "pass_count", label: "通过用例数", width: 100 },
                 { prop: "pass_rate", label: "用例通过率（%）", width: 100 },
@@ -890,6 +909,18 @@ export default {
         format(percentage) {
         return percentage === 100 ? '完成' : `${percentage}%`;
             },
+        testsetStatusTag(status) {
+            if (status === 0 || status === "测试中") {
+                return "";
+            }
+            if (status === 2 || status === "通过" || status === "passed") {
+                return "success";
+            }
+            if (status === 1 || status === "失败" || status === "failed" || status === "error") {
+                return "danger";
+            }
+            return "info";
+        },
         percentagenum(row){
                 if (!row.schedule){
                     return 0
@@ -927,6 +958,12 @@ export default {
                 return value.length ? value[0] : null;
             }
             return value || null;
+        },
+        auditInfoText(row) {
+            const created = row.created_by_name || "-";
+            const updated = row.updated_by_name || "-";
+            const run = row.run_by_name || "-";
+            return "创 " + created + " / 更 " + updated + " / 执 " + run;
         },
         parseIdList(value) {
             if (Array.isArray(value)) {
@@ -1013,9 +1050,12 @@ export default {
             };
             this.listLoading = true;
             await get_testset_info(para).then((res) => {
-                this.aioLst = res.data.data;
+                const rows = res.data.data || [];
+                this.aioLst = rows.map((item) => Object.assign({}, item, {
+                    audit_info: this.auditInfoText(item)
+                }));
                 this.listLoading = false;
-                this.total = res.data.data.length;
+                this.total = rows.length;
             });
         },
         async handleCreateTestset() {
@@ -1976,6 +2016,36 @@ export default {
     } */
 .el-table div.cell {
     white-space: pre-line;
+}
+
+.testset-main-cell {
+    line-height: 1.6;
+}
+
+.testset-title {
+    color: #2f86ff;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.testset-sub {
+    color: #606266;
+    font-size: 12px;
+    line-height: 1.6;
+}
+
+.testset-status-cell {
+    line-height: 1.8;
+}
+
+.testset-status-cell .el-progress {
+    margin-top: 4px;
+}
+
+.compact-progress {
+    width: 150px;
 }
 </style>
     

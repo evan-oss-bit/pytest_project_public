@@ -2,12 +2,12 @@
 import uuid
 
 from flask import Blueprint, jsonify, request
-from sqlalchemy import inspect, text
+from sqlalchemy import inspect, or_, text
 from sqlalchemy.exc import OperationalError
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from app.lib.lib_define import db
-from app.models.test_api_models import Account, AccountProject, Project
+from app.models.test_api_models import Account, AccountProject, OperationLog, Project
 from app.tools.auth_permissions import (
     ADMIN_ROLE,
     PROJECT_USER_ROLE,
@@ -227,3 +227,45 @@ def delete_account():
     account.is_delete = 1
     db.session.commit()
     return jsonify({"code": 200, "msg": "删除成功", "data": None})
+
+
+@auth.route('/auth/get_operation_log', methods=["POST"])
+def get_operation_log():
+    login_error = require_login()
+    if login_error:
+        return login_error
+    if current_account().role != ADMIN_ROLE:
+        return jsonify({"code": 403, "msg": "只有管理员可以查看操作日志", "data": []})
+    data = request.get_json(silent=True) or {}
+    page = int(data.get("page") or 0)
+    page_size = int(data.get("page_size") or 50)
+    username = (data.get("username") or "").strip()
+    action = (data.get("action") or "").strip()
+    target_type = (data.get("target_type") or "").strip()
+    keyword = (data.get("keyword") or "").strip()
+    query = OperationLog.query
+    if username:
+        query = query.filter(OperationLog.username.like(f"%{username}%"))
+    if action:
+        query = query.filter_by(action=action)
+    if target_type:
+        query = query.filter_by(target_type=target_type)
+    if keyword:
+        query = query.filter(
+            or_(
+                OperationLog.target_name.like(f"%{keyword}%"),
+                OperationLog.path.like(f"%{keyword}%"),
+                OperationLog.result_msg.like(f"%{keyword}%"),
+            )
+        )
+    total = query.count()
+    rows = query.order_by(db.desc(OperationLog.created_time)).limit(page_size).offset(page * page_size).all()
+    items = []
+    for item in rows:
+        data = item.to_dict()
+        if data.get("created_time"):
+            data["created_time"] = data["created_time"].strftime("%Y-%m-%d %H:%M:%S")
+        if data.get("updated_time"):
+            data["updated_time"] = data["updated_time"].strftime("%Y-%m-%d %H:%M:%S")
+        items.append(data)
+    return jsonify({"code": 200, "msg": "请求成功", "data": items, "total": total})

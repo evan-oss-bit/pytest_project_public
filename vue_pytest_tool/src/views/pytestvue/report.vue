@@ -192,6 +192,9 @@
                     <div class="report-detail-section-title">基础信息</div>
                     <div class="report-detail-info">
                         <div><span>运行ID</span><strong>{{ selectedReport.run_id || '-' }}</strong></div>
+                        <div><span>创建人</span><strong>{{ selectedReport.created_by_name || '-' }}</strong></div>
+                        <div><span>更新人</span><strong>{{ selectedReport.updated_by_name || '-' }}</strong></div>
+                        <div><span>执行人</span><strong>{{ selectedReport.run_by_name || '-' }}</strong></div>
                         <div><span>报告时间</span><strong>{{ selectedReport.updated_time || '-' }}</strong></div>
                         <div><span>报告文件</span><strong>{{ selectedReport.report_path || '-' }}</strong></div>
                         <div><span>备注</span><strong>{{ selectedReport.mark || '-' }}</strong></div>
@@ -446,6 +449,7 @@ export default {
                 // { prop: "cfg_name", label: "配置名称", width: 120 },
                 { prop: "title", label: "测试报告名（项目名_测试集名_运行id）", width: 200 },
                 { prop: "mark", label: "备注", width: 100 },
+                { prop: "run_by_name", label: "执行人", width: 100 },
                 { prop: "updated_time", label: "更新时间", width: 140 },
 
             ],

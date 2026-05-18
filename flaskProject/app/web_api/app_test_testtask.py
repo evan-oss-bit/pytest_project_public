@@ -21,6 +21,7 @@ from app.tools.auth_permissions import (
     project_ids_from_task,
     require_project_permission,
 )
+from app.tools.audit_fields import apply_run_user
 
 workers = 3
 executor = ProcessPoolExecutor(workers)
@@ -376,6 +377,7 @@ def run_testtask():
         query.run_id = run_id_num
         query.run_status = 1
         query.schedule = 0
+        apply_run_user(query)
         if timed_task_time:
             query.timed_task_time = timed_task_time
             query.run_type = "定时任务"

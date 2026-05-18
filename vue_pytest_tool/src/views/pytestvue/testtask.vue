@@ -42,13 +42,29 @@
                 <!-- <el-table-column type="selection" width="2">
                 </el-table-column> -->
                 <el-table-column type="selection" width="55"> </el-table-column>
-                <el-table-column v-for="item in lstForm" :key="item.prop" :prop="item.prop" :label="item.label"
-                    :width="item.width" style="white-space: pre" sortable>
-                </el-table-column>
-                <el-table-column label="测试集进度"><template slot-scope="scope"><el-progress :percentage="percentagenum2(scope.row)" :format="format"></el-progress></template></el-table-column>
-                <el-table-column label="测试集">
+                <el-table-column label="任务信息" min-width="260" sortable prop="name">
                     <template slot-scope="scope">
-                        <el-tag
+                        <div class="task-main-cell">
+                            <div class="task-title">{{ scope.row.name }}</div>
+                            <div class="task-sub">run_id：{{ scope.row.run_id || "-" }}</div>
+                            <div class="task-sub">当前测试集：{{ scope.row.progress || "-" }}</div>
+                        </div>
+                    </template>
+                </el-table-column>
+                <el-table-column label="执行状态" width="210">
+                    <template slot-scope="scope">
+                        <div class="task-status-cell">
+                            <el-tag size="mini" :type="taskStatusTag(scope.row.run_status)">{{ scope.row.run_status | stateFmt }}</el-tag>
+                            <div class="task-sub">任务进度</div>
+                            <el-progress class="compact-progress" :percentage="percentagenum(scope.row)" :format="format"></el-progress>
+                            <div class="task-sub">测试集进度</div>
+                            <el-progress class="compact-progress" :percentage="percentagenum2(scope.row)" :format="format"></el-progress>
+                        </div>
+                    </template>
+                </el-table-column>
+                <el-table-column label="测试集" min-width="220">
+                    <template slot-scope="scope">
+                        <el-tag size="mini"
                             v-for="tag in scope.row.set_name"
                             :key="tag"
                             type="primary"
@@ -68,14 +84,17 @@
                         </el-tag>
                     </template>
                 </el-table-column> -->
-                <el-table-column label="定时任务倒计时（时:分:秒）" width="95"><template slot-scope="scope">{{ scope.row.countdown}}</template></el-table-column>
-                <el-table-column label="已测试时间（时:分:秒）" width="95"><template slot-scope="scope">{{ scope.row.run_task_time}}</template></el-table-column>
-                <!-- <el-table-column label="用例数量（条）" width="80"><template slot-scope="scope">{{ JSON.parse(scope.row.case_ids).length}}</template></el-table-column> -->
-                <el-table-column label="运行状态" width="100"><template slot-scope="scope">{{ scope.row.run_status | stateFmt
-                }}</template></el-table-column>
-                
-                <el-table-column label="测试进度"><template slot-scope="scope"><el-progress :percentage="percentagenum(scope.row)" :format="format"></el-progress></template></el-table-column>
-                <el-table-column label="操作">
+                <el-table-column label="时间" width="190">
+                    <template slot-scope="scope">
+                        <div class="task-sub">更新：{{ scope.row.updated_time || "-" }}</div>
+                        <div class="task-sub">已测：{{ scope.row.run_task_time || "-" }}</div>
+                        <div class="task-sub" v-if="scope.row.countdown">倒计时：{{ scope.row.countdown }}</div>
+                        <div class="task-sub" v-if="scope.row.timed_task_time">定时：{{ scope.row.timed_task_time }}</div>
+                    </template>
+                </el-table-column>
+                <el-table-column prop="audit_info" label="操作人" width="170" show-overflow-tooltip></el-table-column>
+                <el-table-column prop="mark" label="备注" min-width="110" show-overflow-tooltip></el-table-column>
+                <el-table-column label="操作" width="160" fixed="right">
                     <template slot-scope="scope">
                         <el-row>
                             <el-dropdown split-button type="primary" @click="handleAddEvent(scope.$index, scope.row)"
@@ -1127,6 +1146,7 @@ export default {
                 // { prop: "run_status", label: "运行状态", width: 120 },
                 
                 { prop: "updated_time", label: "更新时间", width: 140 },
+                { prop: "audit_info", label: "操作人", width: 190 },
                 // { prop: "case_count_total", label: "用例数量（条）", width: 80 },
                 { prop: "mark", label: "备注", width: 100 },
                 // { prop: "run_type", label: "运行方式", width: 80 },
@@ -1147,6 +1167,7 @@ export default {
                 // { prop: "run_status", label: "运行状态", width: 120 },
                 // { prop: "schedule", label: "测试进度（%）", width: 80 },
                 { prop: "updated_time", label: "更新时间", width: 175 },
+                { prop: "run_by_name", label: "执行人", width: 100 },
                 // { prop: "case_count_total", label: "用例数量（条）", width: 80 },
                 // { prop: "mark_info", label: "备注", width: 100 },
                 { prop: "run_type", label: "运行方式", width: 80 },
@@ -1160,6 +1181,7 @@ export default {
                 // { prop: "title", label: "测试报告名（项目名_测试集名_运行id）", width: 300 },
                 { prop: "mark", label: "备注", width: 200 },
                 { prop: "case_all_time", label: "用例总耗时/s", width: 100 },
+                { prop: "run_by_name", label: "执行人", width: 100 },
                 { prop: "all_count", label: "全部用例数", width: 100 },
                 { prop: "pass_count", label: "通过用例数", width: 100 },
                 { prop: "pass_rate", label: "用例通过率（%）", width: 100 },
@@ -1236,6 +1258,18 @@ export default {
         format(percentage) {
         return percentage === 100 ? '完成' : `${percentage}%`;
             },
+        taskStatusTag(status) {
+            if (status === 0 || status === "测试中") {
+                return "";
+            }
+            if (status === 2 || status === "通过" || status === "passed") {
+                return "success";
+            }
+            if (status === 1 || status === "失败" || status === "failed" || status === "error") {
+                return "danger";
+            }
+            return "info";
+        },
         percentagenum(row){
                 if (!row.schedule){
                     return 0
@@ -1273,6 +1307,12 @@ export default {
             this.getConfigList();
         },
         handleChange(value, direction, movedKeys) {
+        },
+        auditInfoText(row) {
+            const created = row.created_by_name || "-";
+            const updated = row.updated_by_name || "-";
+            const run = row.run_by_name || "-";
+            return "创 " + created + " / 更 " + updated + " / 执 " + run;
         },
         normalizeIdList(value) {
             if (!value) {
@@ -1481,9 +1521,12 @@ export default {
             };
             this.listLoading = true;
             await get_testtask_info(para).then((res) => {
-                this.aioLst = res.data.data;
+                const rows = res.data.data || [];
+                this.aioLst = rows.map((item) => Object.assign({}, item, {
+                    audit_info: this.auditInfoText(item)
+                }));
                 this.listLoading = false;
-                this.total = res.data.data.length;
+                this.total = rows.length;
             });
         },
         //获取用例列表
@@ -2601,6 +2644,34 @@ export default {
     } */
 .el-table div.cell {
     white-space: pre-line;
+}
+
+.task-main-cell {
+    line-height: 1.6;
+}
+
+.task-title {
+    color: #2f86ff;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.task-sub {
+    color: #606266;
+    font-size: 12px;
+    line-height: 1.6;
+}
+
+.task-status-cell {
+    line-height: 1.8;
+}
+
+.compact-progress {
+    width: 155px;
+    margin-top: 3px;
+    margin-bottom: 3px;
 }
 </style>
     

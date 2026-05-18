@@ -771,6 +771,9 @@ def get_project_dashboard():
             "fail_count": item.fail_count,
             "error_count": item.error_count,
             "case_all_time": float(item.case_all_time) if item.case_all_time is not None else None,
+            "created_by_name": item.created_by_name,
+            "updated_by_name": item.updated_by_name,
+            "run_by_name": item.run_by_name,
             "updated_time": _format_time(item.updated_time),
         }
         for item in recent_reports
@@ -786,6 +789,9 @@ def get_project_dashboard():
             "schedule": item.schedule,
             "run_id": item.run_id,
             "run_type": item.run_type,
+            "created_by_name": item.created_by_name,
+            "updated_by_name": item.updated_by_name,
+            "run_by_name": item.run_by_name,
             "updated_time": _format_time(item.updated_time),
         }
         for item in running_testsets
@@ -803,6 +809,9 @@ def get_project_dashboard():
                 "schedule": item.schedule,
                 "progress": item.progress,
                 "run_id": item.run_id,
+                "created_by_name": item.created_by_name,
+                "updated_by_name": item.updated_by_name,
+                "run_by_name": item.run_by_name,
                 "updated_time": _format_time(item.updated_time),
             })
         if len(running_tasks) >= 10:

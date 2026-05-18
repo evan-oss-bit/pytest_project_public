@@ -400,7 +400,13 @@ def process_run(kwargs, session, case_ids):
                                      case_name=query.case_name,
                                      project_name=kwargs.get("project_name"), duration=duration,
                                      case_created=case_created,
-                                     run_case_result=test["outcome"])
+                                     run_case_result=test["outcome"],
+                                     run_by=set_query.run_by,
+                                     run_by_name=set_query.run_by_name,
+                                     created_by=set_query.run_by,
+                                     created_by_name=set_query.run_by_name,
+                                     updated_by=set_query.run_by,
+                                     updated_by_name=set_query.run_by_name)
                     session.add(res)
                     query.run_status = test["outcome"]
         set_query.schedule = 100
@@ -553,7 +559,10 @@ def th_run_set(**kwargs):
                               report_path=name, all_count=len(case_ids), pass_count=len(pass_ids),
                               error_count=len(error_ids), fail_count=len(fail_ids), mark=kwargs.get("mark"),
                               run_id=kwargs.get("run_id_num"), pass_rate=pass_rate, case_all_time=case_all_time,
-                              project_id=kwargs.get("project_id"), project_name=project_query.name
+                              project_id=kwargs.get("project_id"), project_name=project_query.name,
+                              run_by=set_query.run_by, run_by_name=set_query.run_by_name,
+                              created_by=set_query.run_by, created_by_name=set_query.run_by_name,
+                              updated_by=set_query.run_by, updated_by_name=set_query.run_by_name
                               )
                 session.add(res)
                 session.commit()
@@ -631,6 +640,10 @@ def th_run_task(**kwargs):
                 task_info.progress = set_info.title
                 task_info.progress_set_id = set_info.id
                 set_info.run_id = kwargs.get("run_id_num")
+                set_info.run_by = task_info.run_by
+                set_info.run_by_name = task_info.run_by_name
+                set_info.updated_by = task_info.run_by
+                set_info.updated_by_name = task_info.run_by_name
                 session.commit()
                 time.sleep(0.1)
                 th_run_set(**kwargs)
