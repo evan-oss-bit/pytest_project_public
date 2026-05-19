@@ -1,7 +1,6 @@
 # !/usr/bin/python3.8
 # -*- coding: utf-8 -*-
 # 从app模块中即从__init__.py中导入创建的app应用
-import random
 import traceback
 from flask import jsonify, request, Response
 from app.commom.add_test_case import *
@@ -14,22 +13,13 @@ from concurrent.futures import ProcessPoolExecutor
 from flasgger import swag_from
 import time
 import datetime
-from config import report_path
 from config import logs
-from app.lib import image
 from app.tools import request_details
 from app.tools import sched_task
 import os
 import psutil
-from time import strftime as strf_time
-from time import gmtime
-import signal
-import yagmail
-from app.tools.util import EmailThread
 from app.tools.auth_permissions import (
     allowed_project_ids,
-    filter_project_query,
-    project_id_from_report_path,
     project_id_from_testset,
     require_project_permission,
 )
@@ -57,19 +47,6 @@ def _remove_scheduler_job(job_ids):
         except Exception as e:
             print(e)
     return False
-
-
-def _safe_report_file_path(filename):
-    if not filename:
-        return None
-    report_root = os.path.realpath(report_path)
-    target_path = os.path.realpath(os.path.join(report_root, filename))
-    try:
-        if os.path.commonpath([report_root, target_path]) != report_root:
-            return None
-    except ValueError:
-        return None
-    return target_path
 
 
 @testset.route('/ws')
@@ -552,229 +529,6 @@ def delete_testset():
         delete_set_title.append(query.title)
     db.session.commit()
     return jsonify({'code': 200, 'msg': '测试集已删除', 'data': delete_set_title})
-
-
-@testset.route('/report_content', methods=["POST"])
-@swag_from('../apidocs/report_content.yml')
-@request_details.log_request_response(module="report_content")
-def report_content():
-    """获取测试报告内容"""
-    filename = request.json.get("filename")
-    set_id = request.json.get("set_id")
-    if not filename:
-        return jsonify({"code": 404, "msg": "没有测试报告", "data": None})
-    query = Reports.query.filter_by(report_path=filename).order_by(
-        db.desc(Reports.updated_time)).first()
-    if not query:
-        return jsonify({"code": 404, "msg": "没有测试报告", "data": None})
-    if set_id:
-        query = Reports.query.filter_by(report_path=filename).filter_by(set_id=set_id).order_by(
-            db.desc(Reports.updated_time)).first()
-    if not query:
-        return jsonify({"code": 404, "msg": "没有测试报告", "data": None})
-    permission_error = require_project_permission(query.project_id, "view")
-    if permission_error:
-        return permission_error
-
-    ext = {
-        "jpg": "image/jpeg",
-        "jpeg": "image/jpeg",
-        "png": "image/png",
-        "gif": "image/gif",
-        "webp": "image/webp",
-        "cr2": "image/x-canon-cr2",
-        "tiff": "image/tiff",
-        "bmp": "image/bmp",
-        "jxr": "image/vnd.ms-photo",
-        "psd": "image/vnd.adobe.photoshop",
-        "ico": "image/x-icon",
-        "epub": "application/epub+zip",
-        "zip": "application/zip",
-        "tar": "application/x-tar",
-        "rar": "application/x-rar-compressed",
-        "pdf": "application/pdf",
-        "doc": "application/msword",
-        "rtf": "application/rtf",
-        "html": "text/html",
-        "htm": "text/html",
-        "stm": "text/html",
-        "xlsx": "application/vnd.ms-excel",
-        "xls": "application/vnd.ms-excel",
-        "css": "text/css"
-    }
-    mine = query.report_path.split(".")[-1]
-    if mine in ext.keys():
-        minetype = ext[mine]
-    else:
-        minetype = "text/html"
-    report_allpath = _safe_report_file_path(query.report_path)
-    if not report_allpath:
-        return jsonify({"code": 404, "msg": "测试报告路径不合法！", "data": None})
-    if not os.path.exists(report_allpath):
-        return jsonify({"code": 404, "msg": "测试报告不存在！", "data": None})
-    with open(report_allpath, "rb") as f:
-        response = Response(f.read(), mimetype=minetype)
-
-    # with open(report_allpath, "r", encoding="utf8") as f:
-    #     response = f.read()
-    return response
-
-
-@testset.route('/get_report_info', methods=["POST"])
-@swag_from('../apidocs/get_report_info.yml')
-# @request_details.log_request_response(module="get_report_info")
-def get_report_info():
-    """获取报告列表"""
-    set_id = request.json.get("set_id")
-    title = request.json.get("title", "")
-    run_id = request.json.get("run_id")
-    title = title.strip()
-    page_no = request.json.get("page", 0)
-    page_size = request.json.get("page_size", 10)
-    project_id = request.json.get("project_id")
-    allowed_ids = allowed_project_ids()
-    if project_id:
-        permission_error = require_project_permission(project_id, "view")
-        if permission_error:
-            return permission_error
-    try:
-        if set_id:
-            if title:
-                query = Reports.query.filter_by(set_id=set_id).filter(Reports.title.like(f"%{title}%")).order_by(
-                    db.desc(Reports.updated_time)).limit(page_size).offset(
-                    page_no).all()
-            else:
-                query = Reports.query.filter_by(set_id=set_id).order_by(db.desc(Reports.updated_time)).limit(
-                    page_size).offset(
-                    page_no).all()
-        elif project_id:
-            if set_id:
-                if title:
-                    query = Reports.query.filter_by(project_id=project_id).filter_by(set_id=set_id).filter(
-                        Reports.title.like(f"%{title}%")).order_by(
-                        db.desc(Reports.updated_time)).limit(page_size).offset(
-                        page_no).all()
-                else:
-                    query = Reports.query.filter_by(project_id=project_id).filter_by(set_id=set_id).order_by(
-                        db.desc(Reports.updated_time)).limit(
-                        page_size).offset(
-                        page_no).all()
-            else:
-                query = Reports.query.filter_by(project_id=project_id).order_by(
-                    db.desc(Reports.updated_time)).limit(page_size).offset(
-                    page_no).all()
-        elif title:
-            query = Reports.query.filter(Reports.title.like(f"%{title}%")).order_by(
-                db.desc(Reports.updated_time)).limit(page_size).offset(
-                page_no).all()
-        elif run_id:
-            query = Reports.query.filter_by(run_id=run_id).order_by(
-                Reports.updated_time).limit(page_size).offset(
-                page_no).all()
-        else:
-            query = Reports.query.order_by(db.desc(Reports.updated_time)).limit(page_size).offset(page_no).all()
-        if allowed_ids is not None:
-            query = [item for item in query if item.project_id in allowed_ids]
-        query = [i.to_dict() for i in query]
-        set_ids = image.get_values_by_key(query, "set_id", values=[])
-        if isinstance(set_ids, int):
-            set_ids = [set_ids]
-        set_id_list = None
-        if set_ids:
-            set_id_list = TestSet.query.filter(TestSet.id.in_(set_ids)).all()
-        if set_id_list:
-            set_id_list = [i.to_dict() for i in set_id_list]
-            for i in range(len(query)):
-                for j in set_id_list:
-                    if query[i].get("set_id") == j.get("id"):
-                        query[i].update({"set_title": j.get("title")})
-        cfg_ids = image.get_values_by_key(query, "config_id", values=[])
-        # print(type(cfg_ids))
-        # print(cfg_ids)
-        if isinstance(cfg_ids, str):
-            cfg_ids = [cfg_ids]
-        config_id_list = None
-        ex_ids = list()
-        if cfg_ids:
-            for i in cfg_ids:
-                if isinstance(i, str):
-                    i = eval(i)
-                    if isinstance(i, list):
-                        ex_ids.extend(i)
-                    if isinstance(i, int):
-                        ex_ids.append(i)
-            config_id_list = Cfgs.query.filter(Cfgs.id.in_(ex_ids)).all()
-        if config_id_list:
-            config_id_list = [i.to_dict() for i in config_id_list]
-            for i in range(len(query)):
-                check_ids = eval(query[i].get("config_id"))
-                if isinstance(check_ids, int):
-                    check_ids = [check_ids]
-                names = list()
-                for j in config_id_list:
-                    if j.get("id") in check_ids:
-                        names.append(j.get("cfg_name"))
-                query[i].update({"cfg_name": names})
-        for i in query:
-            if i.get("updated_time"):
-                i.update({"updated_time": i.get("updated_time").strftime("%Y-%m-%d %H:%M:%S")})
-        return_dict = {'code': 200, 'msg': '请求成功', 'data': query}
-        return jsonify(return_dict)
-    except Exception as e:
-        print(traceback.print_exc())
-        return_dict = {'code': 404, 'msg': '内部错误', 'data': None}
-        return jsonify(return_dict)
-
-
-@testset.route('/report_mark', methods=["POST"])
-@swag_from('../apidocs/report_mark.yml')
-def report_mark():
-    mark = request.json.get("mark", "")
-    report_id = request.json.get("id")
-    if not report_id:
-        return {'code': 404, 'msg': '没有report_id', 'data': None}
-    query = Reports.query.filter_by(id=report_id).first()
-    if not query:
-        return {'code': 404, 'msg': '报告不存在', 'data': None}
-    permission_error = require_project_permission(query.project_id, "edit")
-    if permission_error:
-        return permission_error
-    query.mark = mark
-    db.session.commit()
-    return {'code': 200, 'msg': '请求成功！', 'data': None}
-
-
-@testset.route('/send_email', methods=["POST"])
-@swag_from('../apidocs/send_email.yml')
-def send_email_a():
-    email_title = request.json.get("email_title", "")
-    email_to = request.json.get("email_to")
-    report_name = request.json.get("report_path")
-    project_name = request.json.get("project_name", "")
-    set_title = request.json.get("set_title", "")
-    try:
-        permission_error = require_project_permission(project_id_from_report_path(report_name), "view")
-        if permission_error:
-            return permission_error
-        dir_path = _safe_report_file_path(report_name)
-        if not dir_path or not os.path.exists(dir_path):
-            return {'code': 404, 'msg': '报告文件不存在或路径不合法', 'data': None}
-        if email_title:
-            contents = ['您好：', email_title,
-                        yagmail.inline(r"{dir_path}".format(dir_path=dir_path))]
-        else:
-            contents = ['您好：',
-                        f'请查收{project_name}项目的{set_title}测试集的自动化测试报告:',
-                        yagmail.inline(r"{dir_path}".format(dir_path=dir_path))]
-        t = EmailThread(email_to,
-                        subject="自动化测试报告",
-                        contents=contents,
-                        attachments=None)
-        t.start()
-        return {'code': 200, 'msg': '请求成功！', 'data': None}
-    except Exception as e:
-        print(e)
-        return {'code': 404, 'msg': f'发送失败>>>>{e}', 'data': None}
 
 
 @testset.route('/files/<path:path>')

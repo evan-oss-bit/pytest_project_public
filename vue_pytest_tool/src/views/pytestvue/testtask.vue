@@ -1747,7 +1747,7 @@ export default {
             let params = { filename: item.report_path };
             axios({
                 method: 'POST',
-                url: get_url() + '/testset/report_content',
+                url: get_url() + '/report/report_content',
                 data: params
             }).then(res => {
                 const content = res.data;
@@ -2243,7 +2243,7 @@ export default {
             let params = { filename: row.report, set_id: row.id }
             axios({
                 method: 'POST',
-                url: get_url() + '/testset/report_content',
+                url: get_url() + '/report/report_content',
                 // responseType: 'blob',
                 data: params
             }).then(res => {
@@ -2286,7 +2286,7 @@ export default {
             let params = { filename: row.report_path }
             axios({
                 method: 'POST',
-                url: get_url() + '/testset/report_content',
+                url: get_url() + '/report/report_content',
                 // responseType: 'blob',
                 data: params
             }).then(res => {
@@ -2334,7 +2334,7 @@ export default {
             let params = { filename: row.report, set_id: row.id }
             axios({
                 method: 'POST',
-                url: get_url() + '/testset/report_content',
+                url: get_url() + '/report/report_content',
                 // responseType: 'blob',
                 data: params
             }).then(res => {
@@ -2354,7 +2354,7 @@ export default {
             let params = { filename: row.report_path }
             axios({
                 method: 'POST',
-                url: get_url() + '/testset/report_content',
+                url: get_url() + '/report/report_content',
                 // responseType: 'blob',
                 data: params
             }).then(res => {

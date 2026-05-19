@@ -1,0 +1,15 @@
+tags:
+  - 项目配置清理
+description:
+  清理脚本项目配置文件
+parameters:
+  - name: body
+    in: body
+    required: false
+    schema:
+      type: object
+responses:
+  200:
+    description: 请求成功
+  404:
+    description: 请求失败

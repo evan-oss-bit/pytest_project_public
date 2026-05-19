@@ -13,6 +13,7 @@ import TESTSET from './views/pytestvue/testset.vue'
 import RESULT from './views/pytestvue/result.vue'
 import REPORT from './views/pytestvue/report.vue'
 import TESTTASK from './views/pytestvue/testtask.vue'
+import API_TEST from './views/pytestvue/api_test.vue'
 import ACCOUNT from './views/pytestvue/account.vue'
 import OPERATION_LOG from './views/pytestvue/operation_log.vue'
 
@@ -137,6 +138,16 @@ let routes = [
         iconCls: 'fa fa-link',
         children: [
             { path: '/pytest_result', component: RESULT, name: '用例执行结果' }
+        ]
+    },
+    {
+        path: '/',
+        component: Home,
+        name: '接口测试',
+        leaf: true,
+        iconCls: 'fa fa-exchange',
+        children: [
+            { path: '/api_test', component: API_TEST, name: '接口测试' }
         ]
     },
     {

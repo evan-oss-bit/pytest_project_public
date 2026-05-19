@@ -10,8 +10,12 @@ export const requestLogin = (params) => {
   return axios({
     method: "POST",
     url: `${base}/login`,
-    auth: params,
+    data: params,
   }).then((res) => res.data);
+};
+
+export const get_captcha = () => {
+  return axios.get(`${base}/captcha`);
 };
 
 //账号权限-当前账号
@@ -58,6 +62,38 @@ export const get_home_stats = (params) => {
 //进程池占用情况
 export const get_process_pool_status = (params) => {
   return axios.post(`${base}/project/get_process_pool_status`, params);
+};
+//接口测试-环境列表
+export const get_api_environment_info = (params) => {
+  return axios.post(`${base}/api_test/get_environment_info`, params);
+};
+//接口测试-保存环境
+export const save_api_environment = (params) => {
+  return axios.post(`${base}/api_test/save_environment`, params);
+};
+//接口测试-删除环境
+export const delete_api_environment = (params) => {
+  return axios.post(`${base}/api_test/delete_environment`, params);
+};
+//接口测试-用例列表
+export const get_api_case_info = (params) => {
+  return axios.post(`${base}/api_test/get_case_info`, params);
+};
+//接口测试-保存用例
+export const save_api_case = (params) => {
+  return axios.post(`${base}/api_test/save_case`, params);
+};
+//接口测试-删除用例
+export const delete_api_case = (params) => {
+  return axios.post(`${base}/api_test/delete_case`, params);
+};
+//接口测试-运行用例
+export const run_api_case = (params) => {
+  return axios.post(`${base}/api_test/run_case`, params);
+};
+//接口测试-运行历史
+export const get_api_run_history = (params) => {
+  return axios.post(`${base}/api_test/get_run_history`, params);
 };
 //业务部门-获取业务部门列表
 export const get_business_department_info = (params) => {
@@ -216,15 +252,19 @@ export const stop_testtask = (params) => {
 };
 //pytest自动化项目-获取测试报告列表
 export const get_report_info = (params) => {
-  return axios.post(`${base}/testset/get_report_info`, params);
+  return axios.post(`${base}/report/get_report_info`, params);
+};
+//pytest自动化项目-获取测试报告失败分析
+export const get_report_failure_analysis = (params) => {
+  return axios.post(`${base}/report/get_report_failure_analysis`, params);
 };
 // 报告备注
 export const report_mark = (params) => {
-  return axios.post(`${base}/testset/report_mark`, params);
+  return axios.post(`${base}/report/report_mark`, params);
 };
 // 发送邮件
 export const send_email_a = (params) => {
-  return axios.post(`${base}/testset/send_email`, params);
+  return axios.post(`${base}/report/send_email`, params);
 };
 //pytest自动化项目-获取case执行结果信息
 export const get_files = (params) => {

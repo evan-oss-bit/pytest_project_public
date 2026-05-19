@@ -65,6 +65,57 @@
             </el-form>
         </el-col>
 
+        <el-col :span="24" class="failure-analysis-panel">
+            <div class="analysis-head">
+                <div>
+                    <h3>失败分析</h3>
+                    <p>按当前筛选范围统计最近 {{ failureAnalysis.recent_runs || 10 }} 次报告</p>
+                </div>
+                <el-button size="mini" icon="el-icon-refresh" @click="getFailureAnalysis">刷新</el-button>
+            </div>
+            <el-row :gutter="12">
+                <el-col :span="8">
+                    <div class="analysis-card">
+                        <div class="analysis-title">失败用例 Top</div>
+                        <div v-if="!failureAnalysis.failure_top.length" class="analysis-empty">暂无失败用例</div>
+                        <div v-for="item in failureAnalysis.failure_top" :key="'top-' + item.case_id + '-' + item.case_title" class="analysis-row">
+                            <div class="analysis-main">
+                                <strong>{{ item.case_title || item.case_name || '-' }}</strong>
+                                <span>{{ item.project_name || '-' }} · run_id {{ item.latest_run_id || '-' }}</span>
+                            </div>
+                            <div class="analysis-count danger">{{ item.failure_count || 0 }}</div>
+                        </div>
+                    </div>
+                </el-col>
+                <el-col :span="8">
+                    <div class="analysis-card">
+                        <div class="analysis-title">反复失败</div>
+                        <div v-if="!failureAnalysis.repeat_failures.length" class="analysis-empty">暂无同一用例反复失败</div>
+                        <div v-for="item in failureAnalysis.repeat_failures" :key="'repeat-' + item.case_id + '-' + item.case_title" class="analysis-row">
+                            <div class="analysis-main">
+                                <strong>{{ item.case_title || item.case_name || '-' }}</strong>
+                                <span>最近 {{ item.run_count || 0 }} 次运行出现失败</span>
+                            </div>
+                            <el-tag size="mini" type="danger">持续关注</el-tag>
+                        </div>
+                    </div>
+                </el-col>
+                <el-col :span="8">
+                    <div class="analysis-card">
+                        <div class="analysis-title">失败原因聚合</div>
+                        <div v-if="!failureAnalysis.reason_groups.length" class="analysis-empty">暂无失败原因</div>
+                        <div v-for="item in failureAnalysis.reason_groups" :key="'reason-' + item.reason" class="analysis-row reason-row">
+                            <div class="analysis-main">
+                                <strong>{{ item.reason }}</strong>
+                                <span>{{ item.case_count || 0 }} 个用例 · 示例：{{ item.sample_case || '-' }}</span>
+                            </div>
+                            <div class="analysis-count">{{ item.count || 0 }}</div>
+                        </div>
+                    </div>
+                </el-col>
+            </el-row>
+        </el-col>
+
         <!--列表-->
         <el-col :span="24" type="“flex”" style="white-space: pre">
             <el-table :data="aioLst" highlight-current-row stripe height="600" v-loading="listLoading"
@@ -352,6 +403,7 @@ import {
     get_caseresult_info,
     get_testset_info,
     get_report_info,
+    get_report_failure_analysis,
     get_url,
     report_mark,
     send_email_a
@@ -398,6 +450,12 @@ export default {
             datailVisible: false,
             reportDrawerVisible: false,
             selectedReport: null,
+            failureAnalysis: {
+                recent_runs: 10,
+                failure_top: [],
+                repeat_failures: [],
+                reason_groups: [],
+            },
             sels: [], //列表选中列
             caseids: [],
             sendemail_datailVisible: false,
@@ -489,6 +547,28 @@ export default {
             }
             return "通过";
         },
+        async getFailureAnalysis() {
+            let para = {
+                recent_runs: 10,
+                limit: 6,
+                set_id: this.addForm.value && this.addForm.value[0],
+                project_id: this.addForm.value3 && this.addForm.value3[0]
+            };
+            await get_report_failure_analysis(para).then((res) => {
+                if (res.data.code === 200 && res.data.data) {
+                    this.failureAnalysis = Object.assign({
+                        recent_runs: 10,
+                        failure_top: [],
+                        repeat_failures: [],
+                        reason_groups: [],
+                    }, res.data.data);
+                } else {
+                    this.$message({ message: res.data.msg || "获取失败分析失败", type: "warning" });
+                }
+            }).catch(() => {
+                this.$message({ message: "获取失败分析失败", type: "error" });
+            });
+        },
         start() {
             this.timer = setInterval(this.valChange, 8000); // 注意: 第一个参数为方法名的时候不要加括号;
         },
@@ -548,6 +628,7 @@ export default {
                 this.listLoading = false;
                 this.total = res.data.data.length
             });
+            this.getFailureAnalysis();
         },
 
         async add_set() {
@@ -938,7 +1019,7 @@ export default {
             let params = { filename: row.report_path }
             axios({
                 method: 'POST',
-                url: get_url() + '/testset/report_content',
+                url: get_url() + '/report/report_content',
                 // responseType: 'blob',
                 data: params
             }).then(res => {
@@ -981,7 +1062,7 @@ export default {
             let params = { filename: row.report_path }
             axios({
                 method: 'POST',
-                url: get_url() + '/testset/report_content',
+                url: get_url() + '/report/report_content',
                 // responseType: 'blob',
                 data: params
             }).then(res => {
@@ -1133,6 +1214,107 @@ export default {
     } */
 .el-table div.cell {
     white-space: pre-line;
+}
+
+.failure-analysis-panel {
+    margin-bottom: 12px;
+    padding: 12px;
+    background: #f8fafc;
+    border: 1px solid #e4e7ed;
+    border-radius: 4px;
+}
+
+.analysis-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+}
+
+.analysis-head h3 {
+    margin: 0 0 4px;
+    color: #303133;
+    font-size: 15px;
+}
+
+.analysis-head p {
+    margin: 0;
+    color: #909399;
+    font-size: 12px;
+}
+
+.analysis-card {
+    height: 190px;
+    padding: 10px;
+    overflow: auto;
+    background: #ffffff;
+    border: 1px solid #ebeef5;
+    border-radius: 4px;
+}
+
+.analysis-title {
+    margin-bottom: 8px;
+    color: #303133;
+    font-weight: 700;
+}
+
+.analysis-empty {
+    padding: 28px 0;
+    color: #909399;
+    text-align: center;
+}
+
+.analysis-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 7px 0;
+    border-bottom: 1px solid #f0f2f5;
+}
+
+.analysis-row:last-child {
+    border-bottom: 0;
+}
+
+.analysis-main {
+    min-width: 0;
+}
+
+.analysis-main strong {
+    display: block;
+    overflow: hidden;
+    color: #303133;
+    font-size: 13px;
+    line-height: 1.4;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.analysis-main span {
+    display: block;
+    margin-top: 2px;
+    overflow: hidden;
+    color: #909399;
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.analysis-count {
+    min-width: 28px;
+    color: #409eff;
+    font-weight: 700;
+    text-align: right;
+}
+
+.analysis-count.danger {
+    color: #f56c6c;
+}
+
+.reason-row .analysis-main strong {
+    white-space: normal;
+    word-break: break-word;
 }
 
 .report-summary {

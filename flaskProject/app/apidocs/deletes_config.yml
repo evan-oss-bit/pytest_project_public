@@ -1,0 +1,15 @@
+tags:
+  - 配置删除
+description:
+  批量删除配置
+parameters:
+  - name: body
+    in: body
+    required: false
+    schema:
+      type: object
+responses:
+  200:
+    description: 请求成功
+  404:
+    description: 请求失败

@@ -1,0 +1,15 @@
+tags:
+  - 系统信息
+description:
+  获取当前 CPU 和内存信息
+parameters:
+  - name: body
+    in: body
+    required: false
+    schema:
+      type: object
+responses:
+  200:
+    description: 请求成功
+  404:
+    description: 请求失败

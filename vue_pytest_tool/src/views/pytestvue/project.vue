@@ -1627,7 +1627,7 @@ export default {
       }
       axios({
         method: "POST",
-        url: get_url() + "/testset/report_content",
+        url: get_url() + "/report/report_content",
         data: { filename: row.report_path },
       }).then((res) => {
         if (res.data && res.data.code === 404) {

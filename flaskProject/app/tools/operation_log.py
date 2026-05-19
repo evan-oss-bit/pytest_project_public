@@ -9,7 +9,7 @@ from app.lib.lib_define import db
 from app.models.test_api_models import OperationLog
 
 
-SENSITIVE_KEYS = {"password", "old_password", "new_password", "confirm_password", "oldpass", "newpass", "confirpass", "token"}
+SENSITIVE_KEYS = {"password", "old_password", "new_password", "confirm_password", "oldpass", "newpass", "confirpass", "token", "authorization", "cookie", "set-cookie", "api_key", "secret"}
 
 ACTION_RULES = [
     ("case_mark", "remark", "用例备注"),
@@ -32,6 +32,7 @@ ACTION_RULES = [
 ]
 
 TARGET_RULES = [
+    ("/api_test/", "api_test", "接口测试"),
     ("/business_department/", "business_department", "业务部门"),
     ("/project/", "project", "脚本项目"),
     ("/version/", "version", "项目版本"),

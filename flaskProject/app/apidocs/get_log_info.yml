@@ -1,0 +1,15 @@
+tags:
+  - 用例执行日志
+description:
+  获取用例执行日志
+parameters:
+  - name: body
+    in: body
+    required: false
+    schema:
+      type: object
+responses:
+  200:
+    description: 请求成功
+  404:
+    description: 请求失败

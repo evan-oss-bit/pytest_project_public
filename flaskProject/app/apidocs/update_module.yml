@@ -1,0 +1,15 @@
+tags:
+  - 模块更新
+description:
+  更新项目模块
+parameters:
+  - name: body
+    in: body
+    required: false
+    schema:
+      type: object
+responses:
+  200:
+    description: 请求成功
+  404:
+    description: 请求失败

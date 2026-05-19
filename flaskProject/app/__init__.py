@@ -80,6 +80,7 @@ def create_app(register_blueprint=True):
                 return None
             public_prefixes = (
                 "/login",
+                "/captcha",
                 "/traffic/apidocs",
                 "/apispec",
                 "/flasgger_static",

@@ -1,4 +1,9 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
+import base64
+import html
+import random
+import string
+import time
 import uuid
 
 from flask import Blueprint, jsonify, request
@@ -17,6 +22,58 @@ from app.tools.auth_permissions import (
 )
 
 auth = Blueprint("auth", __name__)
+CAPTCHA_TTL_SECONDS = 120
+_captcha_store = {}
+
+
+def _clear_expired_captcha():
+    now = time.time()
+    expired_keys = [key for key, item in _captcha_store.items() if item.get("expire_at", 0) < now]
+    for key in expired_keys:
+        _captcha_store.pop(key, None)
+
+
+def _captcha_svg(code):
+    escaped = html.escape(code)
+    lines = []
+    for _ in range(5):
+        x1, y1 = random.randint(0, 120), random.randint(0, 40)
+        x2, y2 = random.randint(0, 120), random.randint(0, 40)
+        color = random.choice(["#9bb7d4", "#c6d4e1", "#d7a9a9", "#b8d8be"])
+        lines.append(f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{color}" stroke-width="1"/>')
+    return f'''<svg xmlns="http://www.w3.org/2000/svg" width="120" height="40" viewBox="0 0 120 40">
+<rect width="120" height="40" rx="4" fill="#f5f7fa"/>
+{''.join(lines)}
+<text x="18" y="27" font-size="22" font-family="Consolas, monospace" font-weight="700" fill="#34495e" letter-spacing="4">{escaped}</text>
+</svg>'''
+
+
+@auth.route('/captcha', methods=["GET"])
+def captcha():
+    _clear_expired_captcha()
+    captcha_id = str(uuid.uuid4())
+    code = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(4))
+    _captcha_store[captcha_id] = {
+        "code": code.lower(),
+        "expire_at": time.time() + CAPTCHA_TTL_SECONDS,
+    }
+    svg = _captcha_svg(code)
+    image = "data:image/svg+xml;base64," + base64.b64encode(svg.encode("utf-8")).decode("ascii")
+    return jsonify({"code": 200, "msg": "请求成功", "data": {"captcha_id": captcha_id, "image": image}})
+
+
+def _check_captcha(data):
+    _clear_expired_captcha()
+    captcha_id = data.get("captcha_id") or ""
+    captcha_code = (data.get("captcha_code") or "").strip().lower()
+    if not captcha_id or not captcha_code:
+        return False, "请输入验证码"
+    item = _captcha_store.pop(captcha_id, None)
+    if not item:
+        return False, "验证码已过期，请刷新后重试"
+    if item.get("code") != captcha_code:
+        return False, "验证码错误"
+    return True, ""
 
 
 def _ensure_project_department_column():
@@ -94,6 +151,9 @@ def login():
     basic_auth = request.authorization
     username = (data.get("username") or (basic_auth.username if basic_auth else "") or "").strip()
     password = data.get("password") or (basic_auth.password if basic_auth else "")
+    captcha_ok, captcha_msg = _check_captcha(data)
+    if not captcha_ok:
+        return jsonify({"code": 404, "msg": captcha_msg, "token": None, "name": None})
     account = Account.query.filter_by(username=username, is_delete=0).first()
     if not account or not _password_matches(account, password):
         return jsonify({"code": 404, "msg": "账号或密码错误", "token": None, "name": None})

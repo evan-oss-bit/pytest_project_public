@@ -289,3 +289,53 @@ class CaseToken(Base, BaseMixin):
     user = db.Column(db.String(255), nullable=True)
     password = db.Column(db.String(255), nullable=True)
     tokeninfo = db.Column(db.String(191), nullable=True)
+
+
+class ApiEnvironment(Base, BaseMixin):
+    """接口测试环境变量表"""
+    __tablename__ = 'api_environment'
+    name = db.Column(db.String(191), nullable=False, index=True)
+    project_id = db.Column(db.Integer, nullable=True, index=True)
+    variables = db.Column(db.TEXT(65533), nullable=True)
+    description = db.Column(db.String(1000), nullable=True, default="")
+    is_delete = db.Column(db.Integer, nullable=True, default=0)
+
+
+class ApiCase(Base, BaseMixin):
+    """接口测试用例表"""
+    __tablename__ = 'api_case'
+    name = db.Column(db.String(191), nullable=False, index=True)
+    project_id = db.Column(db.Integer, nullable=True, index=True)
+    environment_id = db.Column(db.Integer, nullable=True, index=True)
+    method = db.Column(db.String(20), nullable=False, default="GET")
+    url = db.Column(db.String(2000), nullable=False)
+    headers = db.Column(db.TEXT(65533), nullable=True)
+    params = db.Column(db.TEXT(65533), nullable=True)
+    body_type = db.Column(db.String(40), nullable=True, default="json")
+    body = db.Column(db.TEXT(65533), nullable=True)
+    assertions = db.Column(db.TEXT(65533), nullable=True)
+    description = db.Column(db.String(1000), nullable=True, default="")
+    last_status = db.Column(db.Integer, nullable=True)
+    last_success = db.Column(db.Integer, nullable=True)
+    last_elapsed_ms = db.Column(db.Integer, nullable=True)
+    is_delete = db.Column(db.Integer, nullable=True, default=0)
+
+
+class ApiRunResult(Base, BaseMixin):
+    """接口测试执行结果表"""
+    __tablename__ = 'api_run_result'
+    case_id = db.Column(db.Integer, nullable=True, index=True)
+    environment_id = db.Column(db.Integer, nullable=True, index=True)
+    project_id = db.Column(db.Integer, nullable=True, index=True)
+    method = db.Column(db.String(20), nullable=True)
+    url = db.Column(db.String(2000), nullable=True)
+    request_headers = db.Column(db.TEXT(65533), nullable=True)
+    request_params = db.Column(db.TEXT(65533), nullable=True)
+    request_body = db.Column(db.TEXT(65533), nullable=True)
+    response_status = db.Column(db.Integer, nullable=True)
+    response_headers = db.Column(db.TEXT(65533), nullable=True)
+    response_body = db.Column(db.TEXT(65533), nullable=True)
+    elapsed_ms = db.Column(db.Integer, nullable=True)
+    success = db.Column(db.Integer, nullable=True, default=0)
+    assertion_result = db.Column(db.TEXT(65533), nullable=True)
+    error_message = db.Column(db.TEXT(65533), nullable=True)

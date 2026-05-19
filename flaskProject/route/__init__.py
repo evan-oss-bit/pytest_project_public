@@ -8,6 +8,8 @@ from app.web_api.app_test_config import config
 from app.web_api.app_test_cases import cases
 from app.web_api.app_test_module import module
 from app.web_api.app_test_testset import testset
+from app.web_api.app_test_report import report
+from app.web_api.app_api_test import api_test
 from app.web_api.app_test_caseresult import caseresult
 from app.web_api.app_test_testtask import test_task
 from app.web_api.app_auth import auth
@@ -25,6 +27,8 @@ def init_app(app):
     app.register_blueprint(cases)
     app.register_blueprint(module)
     app.register_blueprint(testset)
+    app.register_blueprint(report)
+    app.register_blueprint(api_test)
     app.register_blueprint(caseresult)
     app.register_blueprint(test_task)
 
