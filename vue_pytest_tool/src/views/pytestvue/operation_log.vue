@@ -31,6 +31,7 @@
             <el-option label="用例" value="case"></el-option>
             <el-option label="测试集" value="testset"></el-option>
             <el-option label="测试任务" value="testtask"></el-option>
+            <el-option label="业务部门" value="business_department"></el-option>
             <el-option label="账号" value="account"></el-option>
           </el-select>
         </el-form-item>
@@ -237,6 +238,7 @@ export default {
         case: "用例",
         testset: "测试集",
         testtask: "测试任务",
+        business_department: "业务部门",
         account: "账号",
       }[type] || type || "-";
     },

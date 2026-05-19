@@ -13,12 +13,14 @@ from app.tools.util import read_ini_file
 from app.tools.util import clear_ini_file
 import ast
 import subprocess
-from datetime import datetime
+from datetime import datetime, timedelta
+import importlib
 import time
-from sqlalchemy import or_
-from app.tools.auth_permissions import allowed_project_ids, filter_project_model_query, is_admin, require_project_permission
+from sqlalchemy import or_, func
+from app.tools.auth_permissions import allowed_project_ids, filter_project_model_query, filter_task_list, is_admin, require_project_permission
 from app.tools.business_department_service import (
     clean_project_value as _clean_project_value,
+    department_project_query as _department_project_query,
     department_name_by_id as _department_name_by_id,
     ensure_business_department_schema as _ensure_business_department_schema,
     ensure_project_meta_columns as _ensure_project_meta_columns,
@@ -404,6 +406,212 @@ def _project_stats(project_id):
             "run_time": _format_time(last_report.updated_time) if last_report else "",
         },
         "failure_trend": failure_trend,
+    }
+
+
+def _home_empty_stats():
+    empty_trend = [
+        {'hour': f'{hour:02d}:00', 'run_count': 0, 'pass_rate': 0, 'failed_count': 0}
+        for hour in range(24)
+    ]
+    return {
+        'project_count': 0,
+        'case_count': 0,
+        'testset_count': 0,
+        'task_count': 0,
+        'today_run_count': 0,
+        'today_pass_rate': 0,
+        'running_count': 0,
+        'running_testset_count': 0,
+        'running_task_count': 0,
+        'failed_pending_count': 0,
+        'today_trend': empty_trend,
+        'running_testsets': [],
+        'running_tasks': [],
+        'recent_failures': [],
+        'continuous_failures': [],
+        'project_health_summary': {'ok': 0, 'warning': 0, 'error': 0},
+        'project_health_items': [],
+        'department_quality': [],
+        'process_pool_status': _empty_process_pool_status(),
+    }
+
+
+def _empty_process_pool_status():
+    empty_detail = {
+        'name': '',
+        'max_workers': 0,
+        'running': 0,
+        'queued': 0,
+        'idle': 0,
+        'pending': 0,
+    }
+    return {
+        'running': 0,
+        'queued': 0,
+        'idle': 0,
+        'max_workers': 0,
+        'pending': 0,
+        'testset': dict(empty_detail, name='测试集进程池'),
+        'testtask': dict(empty_detail, name='测试任务进程池'),
+    }
+
+
+def _executor_pool_status(module_name, display_name):
+    try:
+        module = importlib.import_module(module_name)
+        executor = getattr(module, "executor", None)
+    except Exception:
+        executor = None
+    if executor is None:
+        return {
+            'name': display_name,
+            'max_workers': 0,
+            'running': 0,
+            'queued': 0,
+            'idle': 0,
+            'pending': 0,
+        }
+    max_workers = int(getattr(executor, "_max_workers", 0) or 0)
+    pending_items = getattr(executor, "_pending_work_items", None) or {}
+    pending = len(pending_items)
+    running = min(pending, max_workers)
+    queued = max(pending - max_workers, 0)
+    idle = max(max_workers - running, 0)
+    return {
+        'name': display_name,
+        'max_workers': max_workers,
+        'running': running,
+        'queued': queued,
+        'idle': idle,
+        'pending': pending,
+    }
+
+
+def _process_pool_status():
+    testset_status = _executor_pool_status("app.web_api.app_test_testset", "测试集进程池")
+    testtask_status = _executor_pool_status("app.web_api.app_test_testtask", "测试任务进程池")
+    return {
+        'running': testset_status.get('running', 0) + testtask_status.get('running', 0),
+        'queued': testset_status.get('queued', 0) + testtask_status.get('queued', 0),
+        'idle': testset_status.get('idle', 0) + testtask_status.get('idle', 0),
+        'max_workers': testset_status.get('max_workers', 0) + testtask_status.get('max_workers', 0),
+        'pending': testset_status.get('pending', 0) + testtask_status.get('pending', 0),
+        'testset': testset_status,
+        'testtask': testtask_status,
+    }
+
+
+def _recent_failure_payload(report):
+    return {
+        'id': report.id,
+        'title': report.title,
+        'project_id': report.project_id,
+        'project_name': report.project_name,
+        'set_id': report.set_id,
+        'run_id': report.run_id,
+        'all_count': int(report.all_count or 0),
+        'pass_count': int(report.pass_count or 0),
+        'fail_count': int(report.fail_count or 0),
+        'error_count': int(report.error_count or 0),
+        'pass_rate': float(report.pass_rate) if report.pass_rate is not None else 0,
+        'updated_time': _format_time(report.updated_time),
+    }
+
+
+def _light_project_health(project, stats=None):
+    stats = stats or _project_stats(project.id)
+    warnings = []
+    errors = []
+    last_pass_rate = stats.get("last_pass_rate")
+    failed_count = int(stats.get("last_fail_count") or 0) + int(stats.get("last_error_count") or 0)
+
+    if stats.get("case_count", 0) <= 0:
+        errors.append("暂无用例")
+    if stats.get("testset_count", 0) <= 0:
+        warnings.append("暂无测试集")
+    if stats.get("report_count", 0) <= 0:
+        warnings.append("暂无执行记录")
+    elif failed_count > 0:
+        errors.append(f"最近执行失败/错误 {failed_count} 个")
+    if last_pass_rate is not None:
+        if last_pass_rate < 70:
+            errors.append(f"最近通过率 {last_pass_rate:.2f}%")
+        elif last_pass_rate < 90:
+            warnings.append(f"最近通过率 {last_pass_rate:.2f}%")
+
+    failure_trend = stats.get("failure_trend") or {}
+    consecutive_failed = int(failure_trend.get("consecutive_failed") or 0)
+    if consecutive_failed >= 2:
+        errors.append(f"连续失败 {consecutive_failed} 次")
+
+    if errors:
+        status = "error"
+        label = "异常"
+    elif warnings:
+        status = "warning"
+        label = "需关注"
+    else:
+        status = "ok"
+        label = "健康"
+
+    return {
+        'project_id': project.id,
+        'project_name': project.name,
+        'business_department': project.business_department or "",
+        'status': status,
+        'label': label,
+        'summary': "；".join(errors + warnings) or "最近状态正常",
+        'last_pass_rate': last_pass_rate,
+        'last_run_id': stats.get("last_run_id"),
+        'last_run_time': stats.get("last_run_time") or "",
+        'case_count': stats.get("case_count", 0),
+        'testset_count': stats.get("testset_count", 0),
+        'report_count': stats.get("report_count", 0),
+        'consecutive_failed': consecutive_failed,
+    }
+
+
+def _department_quality_payload(dept, allowed_ids, since_time):
+    projects = _department_project_query(dept).all()
+    project_ids = [item.id for item in projects]
+    if allowed_ids is not None:
+        allowed_set = set(allowed_ids)
+        project_ids = [item for item in project_ids if item in allowed_set]
+    if not project_ids:
+        return {
+            'id': dept.id,
+            'name': dept.name,
+            'project_count': 0,
+            'report_count': 0,
+            'all_count': 0,
+            'pass_count': 0,
+            'fail_count': 0,
+            'error_count': 0,
+            'pass_rate': 0,
+        }
+    summary = Reports.query.filter(
+        Reports.project_id.in_(project_ids),
+        Reports.created_time >= since_time,
+    ).with_entities(
+        func.count(Reports.id),
+        func.coalesce(func.sum(Reports.all_count), 0),
+        func.coalesce(func.sum(Reports.pass_count), 0),
+        func.coalesce(func.sum(Reports.fail_count), 0),
+        func.coalesce(func.sum(Reports.error_count), 0),
+    ).first()
+    all_count = int(summary[1] or 0)
+    pass_count = int(summary[2] or 0)
+    return {
+        'id': dept.id,
+        'name': dept.name,
+        'project_count': len(project_ids),
+        'report_count': int(summary[0] or 0),
+        'all_count': all_count,
+        'pass_count': pass_count,
+        'fail_count': int(summary[3] or 0),
+        'error_count': int(summary[4] or 0),
+        'pass_rate': round(pass_count / all_count * 100, 2) if all_count else 0,
     }
 
 
@@ -1231,3 +1439,172 @@ def clear_ini():
     config_dict = clear_ini_file(path)
     return_dict = {'code': 200, 'msg': '请求成功', 'data': config_dict}
     return return_dict
+
+
+@project.route('/get_home_stats', methods=["POST"])
+def get_home_stats():
+    """获取首页看板统计"""
+    ids = allowed_project_ids()
+    project_query = Project.query
+    case_query = Cases.query.filter_by(is_delete=0)
+    testset_query = TestSet.query.filter_by(is_delete=0)
+    report_query = Reports.query
+    if ids is not None:
+        if not ids:
+            return jsonify({'code': 200, 'msg': '请求成功', 'data': _home_empty_stats()})
+        project_query = project_query.filter(Project.id.in_(ids))
+        case_query = case_query.filter(Cases.project_id.in_(ids))
+        testset_query = testset_query.filter(TestSet.project_id.in_(ids))
+        report_query = report_query.filter(Reports.project_id.in_(ids))
+
+    today_start = datetime.combine(datetime.now().date(), datetime.min.time())
+    today_report_query = report_query.filter(Reports.created_time >= today_start)
+    today_summary = today_report_query.with_entities(
+        func.count(Reports.id),
+        func.coalesce(func.sum(Reports.all_count), 0),
+        func.coalesce(func.sum(Reports.pass_count), 0),
+        func.coalesce(func.sum(Reports.fail_count), 0),
+        func.coalesce(func.sum(Reports.error_count), 0),
+    ).first()
+    today_run_count = int(today_summary[0] or 0)
+    today_all_count = int(today_summary[1] or 0)
+    today_pass_count = int(today_summary[2] or 0)
+    today_fail_count = int(today_summary[3] or 0)
+    today_error_count = int(today_summary[4] or 0)
+    trend_map = {
+        hour: {'hour': f'{hour:02d}:00', 'run_count': 0, 'pass_count': 0, 'all_count': 0, 'failed_count': 0}
+        for hour in range(24)
+    }
+    for item in today_report_query.with_entities(
+            Reports.created_time,
+            Reports.all_count,
+            Reports.pass_count,
+            Reports.fail_count,
+            Reports.error_count,
+    ).all():
+        created_time = item.created_time
+        if not created_time:
+            continue
+        hour = created_time.hour
+        trend_map[hour]['run_count'] += 1
+        trend_map[hour]['all_count'] += int(item.all_count or 0)
+        trend_map[hour]['pass_count'] += int(item.pass_count or 0)
+        trend_map[hour]['failed_count'] += int(item.fail_count or 0) + int(item.error_count or 0)
+    today_trend = []
+    for hour in range(24):
+        item = trend_map[hour]
+        all_count = item.pop('all_count')
+        pass_count = item.pop('pass_count')
+        item['pass_rate'] = round(pass_count / all_count * 100, 2) if all_count else 0
+        today_trend.append(item)
+
+    tasks = TestTask.query.filter_by(is_delete=0).all()
+    tasks = filter_task_list(tasks)
+    running_task_count = len([item for item in tasks if item.run_status == 1])
+    running_testset_count = testset_query.filter(TestSet.run_status == 1).count()
+    running_testsets = []
+    for item in testset_query.filter(TestSet.run_status == 1).order_by(db.desc(TestSet.updated_time)).limit(8).all():
+        running_testsets.append({
+            'id': item.id,
+            'title': item.title,
+            'project_name': item.project_name,
+            'run_id': item.run_id,
+            'schedule': item.schedule or 0,
+            'run_status': item.run_status,
+            'run_by_name': item.run_by_name,
+            'updated_time': _format_time(item.updated_time),
+        })
+    running_tasks = []
+    for item in sorted([task for task in tasks if task.run_status == 1], key=lambda task: task.updated_time or datetime.min, reverse=True)[:8]:
+        running_tasks.append({
+            'id': item.id,
+            'name': item.name,
+            'run_id': item.run_id,
+            'schedule': item.schedule or 0,
+            'set_schedule': getattr(item, 'set_schedule', None) or 0,
+            'progress': item.progress or '',
+            'run_status': item.run_status,
+            'run_by_name': item.run_by_name,
+            'updated_time': _format_time(item.updated_time),
+        })
+
+    projects = project_query.order_by(db.desc(Project.updated_time)).all()
+    project_health_summary = {'ok': 0, 'warning': 0, 'error': 0}
+    project_health_items = []
+    continuous_failures = []
+    for project_item in projects:
+        stats = _project_stats(project_item.id)
+        health = _light_project_health(project_item, stats)
+        project_health_summary[health['status']] += 1
+        project_health_items.append(health)
+        if health.get('consecutive_failed', 0) >= 2:
+            continuous_failures.append({
+                'project_id': project_item.id,
+                'project_name': project_item.name,
+                'business_department': project_item.business_department or "",
+                'consecutive_failed': health.get('consecutive_failed', 0),
+                'last_run_id': stats.get("last_run_id"),
+                'last_pass_rate': stats.get("last_pass_rate"),
+                'last_fail_count': stats.get("last_fail_count", 0),
+                'last_error_count': stats.get("last_error_count", 0),
+                'last_run_time': stats.get("last_run_time") or "",
+            })
+    project_health_items = sorted(
+        project_health_items,
+        key=lambda item: (
+            {'error': 0, 'warning': 1, 'ok': 2}.get(item.get('status'), 3),
+            -(item.get('consecutive_failed') or 0),
+            item.get('last_pass_rate') if item.get('last_pass_rate') is not None else 101,
+        )
+    )[:10]
+    continuous_failures = sorted(
+        continuous_failures,
+        key=lambda item: (item.get('consecutive_failed') or 0, item.get('last_run_time') or ""),
+        reverse=True
+    )[:8]
+    recent_failures = [
+        _recent_failure_payload(item)
+        for item in report_query.filter(or_(Reports.fail_count > 0, Reports.error_count > 0))
+        .order_by(db.desc(Reports.updated_time)).limit(8).all()
+    ]
+    week_start = datetime.now() - timedelta(days=7)
+    department_quality = [
+        _department_quality_payload(item, ids, week_start)
+        for item in BusinessDepartment.query.filter_by(is_delete=0).order_by(BusinessDepartment.name.asc()).all()
+    ]
+    department_quality = sorted(
+        [item for item in department_quality if item.get('project_count', 0) > 0],
+        key=lambda item: (
+            item.get('fail_count', 0) + item.get('error_count', 0),
+            -item.get('pass_rate', 0)
+        ),
+        reverse=True
+    )[:8]
+
+    return jsonify({'code': 200, 'msg': '请求成功', 'data': {
+        'project_count': len(projects),
+        'case_count': case_query.count(),
+        'testset_count': testset_query.count(),
+        'task_count': len(tasks),
+        'today_run_count': today_run_count,
+        'today_pass_rate': round(today_pass_count / today_all_count * 100, 2) if today_all_count else 0,
+        'running_count': running_testset_count + running_task_count,
+        'running_testset_count': running_testset_count,
+        'running_task_count': running_task_count,
+        'failed_pending_count': today_fail_count + today_error_count,
+        'today_trend': today_trend,
+        'running_testsets': running_testsets,
+        'running_tasks': running_tasks,
+        'recent_failures': recent_failures,
+        'continuous_failures': continuous_failures,
+        'project_health_summary': project_health_summary,
+        'project_health_items': project_health_items,
+        'department_quality': department_quality,
+        'process_pool_status': _process_pool_status(),
+    }})
+
+
+@project.route('/get_process_pool_status', methods=["POST"])
+def get_process_pool_status():
+    """获取进程池占用情况"""
+    return jsonify({'code': 200, 'msg': '请求成功', 'data': _process_pool_status()})

@@ -32,6 +32,7 @@ ACTION_RULES = [
 ]
 
 TARGET_RULES = [
+    ("/business_department/", "business_department", "业务部门"),
     ("/project/", "project", "脚本项目"),
     ("/version/", "version", "项目版本"),
     ("/module/", "module", "项目模块"),

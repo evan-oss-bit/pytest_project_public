@@ -13,10 +13,10 @@ from app.tools.business_department_service import (
     ensure_business_department_schema,
 )
 from app.tools.auth_permissions import is_admin
-from app.web_api import project
+from app.web_api import business_department
 
 
-@project.route('/get_business_department_info', methods=["POST"])
+@business_department.route('/get_business_department_info', methods=["POST"])
 @swag_from('../apidocs/get_business_department_info.yml')
 def get_business_department_info():
     """获取业务部门列表"""
@@ -35,7 +35,7 @@ def get_business_department_info():
     })
 
 
-@project.route('/save_business_department', methods=["POST"])
+@business_department.route('/save_business_department', methods=["POST"])
 @swag_from('../apidocs/save_business_department.yml')
 def save_business_department():
     """新增或编辑业务部门"""
@@ -76,7 +76,7 @@ def save_business_department():
     return jsonify({'code': 200, 'msg': '请求成功', 'data': department_payload(dept)})
 
 
-@project.route('/delete_business_department', methods=["POST"])
+@business_department.route('/delete_business_department', methods=["POST"])
 @swag_from('../apidocs/delete_business_department.yml')
 def delete_business_department():
     """删除业务部门"""
@@ -94,7 +94,7 @@ def delete_business_department():
     return jsonify({'code': 200, 'msg': '请求成功', 'data': dept_id})
 
 
-@project.route('/get_business_department_dashboard', methods=["POST"])
+@business_department.route('/get_business_department_dashboard', methods=["POST"])
 @swag_from('../apidocs/get_business_department_dashboard.yml')
 def get_business_department_dashboard():
     """获取业务部门总览"""

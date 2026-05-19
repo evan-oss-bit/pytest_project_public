@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 from app.web_api.app_test_project import project
-from app.web_api import app_business_department
+from app.web_api.app_business_department import business_department
 from app.web_api.app_test_version import version
 from app.web_api.app_test_config import config
 from app.web_api.app_test_cases import cases
@@ -19,6 +19,7 @@ from app.web_api.app_auth import auth
 def init_app(app):
     app.register_blueprint(auth)
     app.register_blueprint(project)
+    app.register_blueprint(business_department)
     app.register_blueprint(version)
     app.register_blueprint(config)
     app.register_blueprint(cases)

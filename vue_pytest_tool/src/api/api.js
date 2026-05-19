@@ -51,21 +51,29 @@ export const get_project_info = (params) => {
 export const get_project_dashboard = (params) => {
   return axios.post(`${base}/project/get_project_dashboard`, params);
 };
-//pytest自动化项目-获取业务部门列表
+//首页看板-顶部统计
+export const get_home_stats = (params) => {
+  return axios.post(`${base}/project/get_home_stats`, params);
+};
+//进程池占用情况
+export const get_process_pool_status = (params) => {
+  return axios.post(`${base}/project/get_process_pool_status`, params);
+};
+//业务部门-获取业务部门列表
 export const get_business_department_info = (params) => {
-  return axios.post(`${base}/project/get_business_department_info`, params);
+  return axios.post(`${base}/business_department/get_business_department_info`, params);
 };
-//pytest自动化项目-保存业务部门
+//业务部门-保存业务部门
 export const save_business_department = (params) => {
-  return axios.post(`${base}/project/save_business_department`, params);
+  return axios.post(`${base}/business_department/save_business_department`, params);
 };
-//pytest自动化项目-删除业务部门
+//业务部门-删除业务部门
 export const delete_business_department = (params) => {
-  return axios.post(`${base}/project/delete_business_department`, params);
+  return axios.post(`${base}/business_department/delete_business_department`, params);
 };
-//pytest自动化项目-业务部门总览
+//业务部门-业务部门总览
 export const get_business_department_dashboard = (params) => {
-  return axios.post(`${base}/project/get_business_department_dashboard`, params);
+  return axios.post(`${base}/business_department/get_business_department_dashboard`, params);
 };
 //pytest自动化项目-检测脚本变更
 export const check_script_changes = (params) => {

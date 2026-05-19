@@ -3,6 +3,7 @@
 from flask import Blueprint
 
 project = Blueprint("project", __name__, url_prefix='/project')
+business_department = Blueprint("business_department", __name__, url_prefix='/business_department')
 version = Blueprint("version", __name__, url_prefix='/version')
 config = Blueprint("config", __name__, url_prefix='/config')
 cases = Blueprint("cases", __name__, url_prefix='/cases')

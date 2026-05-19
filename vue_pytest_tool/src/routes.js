@@ -2,6 +2,7 @@ import Login from './views/Login.vue'
 import NotFound from './views/404.vue'
 import Home from './views/Home.vue'
 
+import DASHBOARD from './views/pytestvue/dashboard.vue'
 import CONFIG from './views/pytestvue/config.vue'
 import PROJECT from './views/pytestvue/project.vue'
 import DEPARTMENT from './views/pytestvue/department.vue'
@@ -27,6 +28,16 @@ let routes = [
         component: NotFound,
         name: '',
         hidden: true
+    },
+    {
+        path: '/',
+        component: Home,
+        name: '首页看板',
+        leaf: true,
+        iconCls: 'fa fa-dashboard',
+        children: [
+            { path: '/dashboard', component: DASHBOARD, name: '首页看板' }
+        ]
     },
     {
         path: '/',

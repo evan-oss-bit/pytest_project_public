@@ -39,7 +39,7 @@
 			var token = sessionStorage.getItem('token');
 			if (token) {
         sessionStorage.setItem('token', token);
-        this.$router.push({ path: '/pytest_project' });
+        this.$router.push({ path: '/dashboard' });
       }
     },
     methods: {
@@ -65,7 +65,7 @@
                 sessionStorage.setItem('token', token);
                 sessionStorage.setItem('name', name);
                 sessionStorage.setItem('user', JSON.stringify(user || {}));
-                this.$router.push({ path: '/pytest_project' });
+                this.$router.push({ path: '/dashboard' });
               }
             });
           } else {

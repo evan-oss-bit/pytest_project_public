@@ -37,6 +37,20 @@
                 </el-col>
             </el-form>
         </el-col>
+        <el-col :span="24">
+            <div class="pool-usage-bar">
+                <div class="pool-usage-main">
+                    <span class="pool-title">进程池占用</span>
+                    <el-tag size="mini" type="primary">运行中 {{ poolDetail.running || 0 }}</el-tag>
+                    <el-tag size="mini" type="warning">排队中 {{ poolDetail.queued || 0 }}</el-tag>
+                    <el-tag size="mini" type="success">空闲 {{ poolDetail.idle || 0 }}</el-tag>
+                    <span class="pool-capacity">容量 {{ poolDetail.max_workers || 0 }}</span>
+                </div>
+                <div class="pool-usage-detail">
+                    <el-button type="text" icon="el-icon-refresh" @click="loadProcessPoolStatus">刷新</el-button>
+                </div>
+            </div>
+        </el-col>
         <!-- <template>
             <div v-html="htmlContent"></div>
         </template> -->
@@ -625,6 +639,7 @@ import {
     get_cases_info,
     add_testset,
     get_report_info,
+    get_process_pool_status,
 } from "../../api/api";
 import moment from "moment";
 import Vue from "vue";
@@ -747,6 +762,14 @@ export default {
             rerun_type: 0,
             addStatus: true,
             listLoading: false,
+            processPool: {
+                running: 0,
+                queued: 0,
+                idle: 0,
+                max_workers: 0,
+                testset: {},
+                testtask: {},
+            },
             sels: [], //列表选中列
 
             detailFormVisible: false, //详情界面是否显示
@@ -898,7 +921,20 @@ export default {
 //       });
 //     }
 //   },
+    computed: {
+        poolDetail() {
+            return this.processPool.testset || { name: '测试集进程池', max_workers: 0, running: 0, queued: 0, idle: 0 };
+        },
+    },
     methods: {
+
+        async loadProcessPoolStatus() {
+            await get_process_pool_status({}).then((res) => {
+                if (res.data.code === 200) {
+                    this.processPool = Object.assign({}, this.processPool, res.data.data || {});
+                }
+            });
+        },
 
         start() {
             this.timer = setInterval(this.valChange, 10000); // 注意: 第一个参数为方法名的时候不要加括号;
@@ -1057,6 +1093,7 @@ export default {
                 this.listLoading = false;
                 this.total = rows.length;
             });
+            this.loadProcessPoolStatus();
         },
         async handleCreateTestset() {
             this.isCreateSet = true;
@@ -2042,6 +2079,43 @@ export default {
 
 .testset-status-cell .el-progress {
     margin-top: 4px;
+}
+
+.pool-usage-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin: 8px 0 10px;
+    padding: 10px 12px;
+    border: 1px solid #e5e9f2;
+    border-radius: 6px;
+    background: #fff;
+}
+
+.pool-usage-main,
+.pool-usage-detail {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #606266;
+    font-size: 13px;
+}
+
+.pool-title {
+    color: #1f2d3d;
+    font-weight: 600;
+}
+
+.pool-capacity {
+    color: #909399;
+}
+
+@media (max-width: 1200px) {
+    .pool-usage-bar {
+        align-items: flex-start;
+        flex-direction: column;
+    }
 }
 
 .compact-progress {
