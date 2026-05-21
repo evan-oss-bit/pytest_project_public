@@ -120,6 +120,62 @@
                 </el-table-column>
               </el-table>
             </el-tab-pane>
+            <el-tab-pane label="依赖" name="dependencies">
+              <el-alert
+                title="运行当前接口时会先按依赖链执行前置接口，并把提取出的变量传给后续接口。"
+                type="info"
+                :closable="false"
+                show-icon>
+              </el-alert>
+              <el-select
+                v-model="currentCase.pre_case_ids"
+                multiple
+                filterable
+                clearable
+                style="width: 100%; margin-top: 12px"
+                placeholder="选择前置依赖接口">
+                <el-option
+                  v-for="item in dependencyOptions"
+                  :key="item.id"
+                  :label="item.name + '  [' + item.method + '] ' + item.url"
+                  :value="item.id">
+                </el-option>
+              </el-select>
+            </el-tab-pane>
+            <el-tab-pane label="变量提取" name="extractors">
+              <div class="assertion-tools">
+                <el-button size="mini" icon="el-icon-plus" @click="addExtractor('json')">JSON提取</el-button>
+                <el-button size="mini" icon="el-icon-plus" @click="addExtractor('header')">Header提取</el-button>
+                <el-button size="mini" icon="el-icon-plus" @click="addExtractor('regex')">正则提取</el-button>
+              </div>
+              <el-table :data="currentCase.extractors" border size="mini">
+                <el-table-column label="变量名" width="140">
+                  <template slot-scope="scope">
+                    <el-input v-model="scope.row.name" size="mini" placeholder="token"></el-input>
+                  </template>
+                </el-table-column>
+                <el-table-column label="来源" width="120">
+                  <template slot-scope="scope">
+                    <el-select v-model="scope.row.from" size="mini">
+                      <el-option label="JSON" value="json"></el-option>
+                      <el-option label="Header" value="header"></el-option>
+                      <el-option label="正则" value="regex"></el-option>
+                      <el-option label="Body全文" value="body"></el-option>
+                    </el-select>
+                  </template>
+                </el-table-column>
+                <el-table-column label="路径/Header/正则" min-width="220">
+                  <template slot-scope="scope">
+                    <el-input v-model="scope.row.path" size="mini" placeholder="data.token / Authorization / token=(.+?)&"></el-input>
+                  </template>
+                </el-table-column>
+                <el-table-column label="操作" width="70">
+                  <template slot-scope="scope">
+                    <el-button type="text" size="mini" @click="currentCase.extractors.splice(scope.$index, 1)">删除</el-button>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </el-tab-pane>
             <el-tab-pane label="环境变量" name="env">
               <div class="env-toolbar">
                 <el-button type="primary" size="small" icon="el-icon-plus" @click="newEnvironment">新增环境</el-button>
@@ -138,6 +194,68 @@
                   </template>
                 </el-table-column>
               </el-table>
+            </el-tab-pane>
+            <el-tab-pane label="接口集合" name="suite">
+              <div class="suite-layout">
+                <div class="suite-list">
+                  <div class="suite-toolbar">
+                    <el-button type="success" size="small" icon="el-icon-plus" @click="newSuite">新增集合</el-button>
+                    <el-button size="small" icon="el-icon-refresh" @click="loadSuites">刷新</el-button>
+                  </div>
+                  <el-table :data="suites" border size="mini" height="260" @row-click="selectSuite">
+                    <el-table-column prop="name" label="集合名称" min-width="160"></el-table-column>
+                    <el-table-column label="接口数" width="70">
+                      <template slot-scope="scope">{{ (scope.row.case_ids || []).length }}</template>
+                    </el-table-column>
+                    <el-table-column label="结果" width="80">
+                      <template slot-scope="scope">
+                        <el-tag v-if="scope.row.last_success !== null && scope.row.last_success !== undefined" size="mini" :type="scope.row.last_success ? 'success' : 'danger'">
+                          {{ scope.row.last_success ? "通过" : "失败" }}
+                        </el-tag>
+                        <span v-else>-</span>
+                      </template>
+                    </el-table-column>
+                  </el-table>
+                </div>
+                <div class="suite-editor">
+                  <el-form label-width="80px" size="small">
+                    <el-form-item label="集合名称">
+                      <el-input v-model="suiteForm.name" placeholder="例如：登录下单流程"></el-input>
+                    </el-form-item>
+                    <el-form-item label="所属项目">
+                      <el-select v-model="suiteForm.project_id" clearable placeholder="可选">
+                        <el-option v-for="item in projects" :key="item.id" :label="item.name" :value="item.id"></el-option>
+                      </el-select>
+                    </el-form-item>
+                    <el-form-item label="环境">
+                      <el-select v-model="suiteForm.environment_id" clearable placeholder="可选">
+                        <el-option v-for="item in environments" :key="item.id" :label="item.name" :value="item.id"></el-option>
+                      </el-select>
+                    </el-form-item>
+                    <el-form-item label="执行规则">
+                      <el-checkbox v-model="suiteForm.stop_on_fail">失败后中断</el-checkbox>
+                    </el-form-item>
+                    <el-form-item label="接口顺序">
+                      <el-select v-model="suiteForm.case_ids" multiple filterable clearable style="width: 100%" placeholder="按选择顺序运行接口">
+                        <el-option
+                          v-for="item in cases"
+                          :key="item.id"
+                          :label="item.name + '  [' + item.method + '] ' + item.url"
+                          :value="item.id">
+                        </el-option>
+                      </el-select>
+                    </el-form-item>
+                    <el-form-item label="备注">
+                      <el-input v-model="suiteForm.description" type="textarea" :rows="2"></el-input>
+                    </el-form-item>
+                    <el-form-item>
+                      <el-button type="primary" icon="el-icon-check" @click="saveSuite">保存集合</el-button>
+                      <el-button type="success" icon="el-icon-video-play" :loading="suiteRunning" @click="runSuite">运行集合</el-button>
+                      <el-button type="danger" icon="el-icon-delete" :disabled="!suiteForm.id" @click="removeSuite">删除集合</el-button>
+                    </el-form-item>
+                  </el-form>
+                </div>
+              </div>
             </el-tab-pane>
           </el-tabs>
 
@@ -170,6 +288,38 @@
                   <el-table-column prop="error" label="错误" min-width="180"></el-table-column>
                 </el-table>
               </el-tab-pane>
+              <el-tab-pane label="提取变量" name="extractors">
+                <el-table :data="lastResult.extractor_result || []" size="mini" border>
+                  <el-table-column label="结果" width="90">
+                    <template slot-scope="scope">
+                      <el-tag size="mini" :type="scope.row.success ? 'success' : 'danger'">{{ scope.row.success ? "成功" : "失败" }}</el-tag>
+                    </template>
+                  </el-table-column>
+                  <el-table-column prop="name" label="变量名" width="140"></el-table-column>
+                  <el-table-column prop="from" label="来源" width="100"></el-table-column>
+                  <el-table-column prop="path" label="路径" min-width="180"></el-table-column>
+                  <el-table-column prop="value" label="提取值" min-width="200" show-overflow-tooltip></el-table-column>
+                  <el-table-column prop="error" label="错误" min-width="180"></el-table-column>
+                </el-table>
+              </el-tab-pane>
+              <el-tab-pane label="依赖链" name="chain">
+                <el-table :data="lastResult.chain_results || []" size="mini" border height="260">
+                  <el-table-column prop="case_name" label="接口" min-width="180"></el-table-column>
+                  <el-table-column prop="method" label="方法" width="80"></el-table-column>
+                  <el-table-column prop="response_status" label="状态" width="80"></el-table-column>
+                  <el-table-column prop="elapsed_ms" label="耗时ms" width="90"></el-table-column>
+                  <el-table-column label="结果" width="80">
+                    <template slot-scope="scope">
+                      <el-tag size="mini" :type="scope.row.success ? 'success' : 'danger'">{{ scope.row.success ? "通过" : "失败" }}</el-tag>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="提取变量" min-width="200">
+                    <template slot-scope="scope">
+                      <code>{{ scope.row.extracted_variables || {} }}</code>
+                    </template>
+                  </el-table-column>
+                </el-table>
+              </el-tab-pane>
               <el-tab-pane label="执行历史" name="history">
                 <el-table :data="history" size="mini" border height="260">
                   <el-table-column prop="created_time" label="时间" width="160"></el-table-column>
@@ -183,6 +333,30 @@
                   </el-table-column>
                   <el-table-column prop="url" label="URL" min-width="260" show-overflow-tooltip></el-table-column>
                 </el-table>
+              </el-tab-pane>
+              <el-tab-pane label="集合结果" name="suite_result">
+                <div v-if="suiteResult">
+                  <div class="suite-summary">
+                    <el-tag :type="suiteResult.success ? 'success' : 'danger'">{{ suiteResult.success ? "通过" : "失败" }}</el-tag>
+                    <strong>总 {{ suiteResult.total_count || 0 }}</strong>
+                    <span>通过 {{ suiteResult.pass_count || 0 }}</span>
+                    <span>失败 {{ suiteResult.fail_count || 0 }}</span>
+                    <span>耗时 {{ suiteResult.elapsed_ms || 0 }} ms</span>
+                  </div>
+                  <el-table :data="suiteResult.step_results || []" size="mini" border height="280">
+                    <el-table-column prop="suite_index" label="#" width="60"></el-table-column>
+                    <el-table-column prop="case_name" label="接口" min-width="180"></el-table-column>
+                    <el-table-column prop="method" label="方法" width="80"></el-table-column>
+                    <el-table-column prop="response_status" label="状态" width="80"></el-table-column>
+                    <el-table-column prop="elapsed_ms" label="耗时ms" width="90"></el-table-column>
+                    <el-table-column label="结果" width="80">
+                      <template slot-scope="scope">
+                        <el-tag size="mini" :type="scope.row.success ? 'success' : 'danger'">{{ scope.row.success ? "通过" : "失败" }}</el-tag>
+                      </template>
+                    </el-table-column>
+                    <el-table-column prop="error_message" label="错误" min-width="180" show-overflow-tooltip></el-table-column>
+                  </el-table>
+                </div>
               </el-tab-pane>
             </el-tabs>
           </div>
@@ -219,13 +393,17 @@
 import {
   delete_api_case,
   delete_api_environment,
+  delete_api_suite,
   get_api_case_info,
   get_api_environment_info,
   get_api_run_history,
+  get_api_suite_info,
   get_project_info,
   run_api_case,
+  run_api_suite,
   save_api_case,
   save_api_environment,
+  save_api_suite,
 } from "../../api/api";
 
 const JsonEditor = {
@@ -246,6 +424,20 @@ function emptyCase() {
     body_type: "json",
     body: "{\n  \n}",
     assertions: [{ type: "status_code", expected: "200", path: "" }],
+    pre_case_ids: [],
+    extractors: [],
+  };
+}
+
+function emptySuite() {
+  return {
+    id: "",
+    name: "",
+    project_id: "",
+    environment_id: "",
+    case_ids: [],
+    stop_on_fail: true,
+    description: "",
   };
 }
 
@@ -264,9 +456,13 @@ export default {
       envDialogVisible: false,
       filters: { keyword: "", project_id: "" },
       cases: [],
+      suites: [],
       projects: [],
       environments: [],
       currentCase: emptyCase(),
+      suiteForm: emptySuite(),
+      suiteRunning: false,
+      suiteResult: null,
       currentEnvironment: {},
       envForm: { id: "", name: "", project_id: "", variablesText: "{\n  \n}", description: "" },
       lastResult: null,
@@ -274,6 +470,9 @@ export default {
     };
   },
   computed: {
+    dependencyOptions() {
+      return this.cases.filter((item) => item.id && item.id !== this.currentCase.id);
+    },
     bodyPlaceholder() {
       return this.currentCase.body_type === "form" ? '{"username": "admin"}' : '{\n  "name": "demo"\n}';
     },
@@ -313,6 +512,8 @@ export default {
         body_type: row.body_type || "json",
         body: row.body || "",
         assertions: row.assertions && row.assertions.length ? row.assertions : [],
+        pre_case_ids: row.pre_case_ids || [],
+        extractors: row.extractors || [],
       };
     },
     methodType(method) {
@@ -346,6 +547,18 @@ export default {
         this.caseLoading = false;
       });
     },
+    async loadSuites() {
+      const params = { page_no: 0, page_size: 1000, keyword: this.filters.keyword, project_id: this.filters.project_id };
+      await get_api_suite_info(params).then((res) => {
+        if (res.data && res.data.code === 200) {
+          this.suites = res.data.data || [];
+        } else {
+          this.suites = [];
+        }
+      }).catch(() => {
+        this.suites = [];
+      });
+    },
     async loadEnvironments() {
       await get_api_environment_info({ project_id: this.filters.project_id }).then((res) => {
         if (res.data && res.data.code === 200) {
@@ -359,6 +572,7 @@ export default {
     },
     handleProjectChange() {
       this.loadCases();
+      this.loadSuites();
       this.loadEnvironments();
     },
     selectCase(row) {
@@ -385,6 +599,8 @@ export default {
         body_type: this.currentCase.body_type,
         body: this.currentCase.body_type === "none" ? "" : this.currentCase.body,
         assertions: this.currentCase.assertions || [],
+        pre_case_ids: this.currentCase.pre_case_ids || [],
+        extractors: this.currentCase.extractors || [],
       };
     },
     async saveCase() {
@@ -440,6 +656,13 @@ export default {
     addAssertion(type) {
       this.currentCase.assertions.push({ type, path: "", expected: type === "status_code" ? "200" : "" });
     },
+    addExtractor(source) {
+      this.currentCase.extractors.push({
+        name: "",
+        from: source,
+        path: source === "json" ? "data.token" : "",
+      });
+    },
     chooseEnvironment(row) {
       this.currentEnvironment = row;
       this.currentCase.environment_id = row.id;
@@ -494,10 +717,76 @@ export default {
         this.history = res.data.data || [];
       }
     },
+    newSuite() {
+      this.suiteForm = emptySuite();
+      this.suiteForm.project_id = this.filters.project_id || "";
+      this.suiteResult = null;
+    },
+    selectSuite(row) {
+      this.suiteForm = {
+        id: row.id || "",
+        name: row.name || "",
+        project_id: row.project_id || "",
+        environment_id: row.environment_id || "",
+        case_ids: row.case_ids || [],
+        stop_on_fail: !!row.stop_on_fail,
+        description: row.description || "",
+      };
+      this.suiteResult = null;
+    },
+    async saveSuite() {
+      const payload = Object.assign({}, this.suiteForm, {
+        stop_on_fail: this.suiteForm.stop_on_fail ? 1 : 0,
+      });
+      const res = await save_api_suite(payload);
+      if (!res.data || res.data.code !== 200) {
+        this.$message.warning((res.data && res.data.msg) || "保存失败");
+        return;
+      }
+      this.$message.success(res.data.msg);
+      this.selectSuite(res.data.data);
+      this.loadSuites();
+    },
+    async runSuite() {
+      if (!this.suiteForm.id) {
+        await this.saveSuite();
+        if (!this.suiteForm.id) {
+          return;
+        }
+      }
+      this.suiteRunning = true;
+      await run_api_suite({ id: this.suiteForm.id, environment_id: this.suiteForm.environment_id }).then((res) => {
+        if (!res.data || res.data.code !== 200) {
+          this.$message.warning((res.data && res.data.msg) || "执行失败");
+          return;
+        }
+        this.suiteResult = res.data.data;
+        this.lastResult = { success: this.suiteResult.success, response_status: "-", elapsed_ms: this.suiteResult.elapsed_ms, assertion_result: [], extractor_result: [] };
+        this.responseTab = "suite_result";
+        this.loadSuites();
+      }).finally(() => {
+        this.suiteRunning = false;
+      });
+    },
+    async removeSuite() {
+      if (!this.suiteForm.id) {
+        return;
+      }
+      await this.$confirm("确认删除这个接口集合？", "提示", { type: "warning" });
+      const res = await delete_api_suite({ id: this.suiteForm.id });
+      if (res.data && res.data.code === 200) {
+        this.$message.success(res.data.msg);
+        this.newSuite();
+        this.loadSuites();
+      } else {
+        this.$message.warning((res.data && res.data.msg) || "删除失败");
+      }
+    },
   },
   mounted() {
     this.loadProjects();
     this.loadCases();
+    this.loadSuites();
     this.loadEnvironments();
   },
 };
@@ -592,6 +881,22 @@ export default {
   border: 1px solid #e1e7ef;
   font-family: Consolas, "Courier New", monospace;
   line-height: 1.55;
+}
+.suite-layout {
+  display: grid;
+  grid-template-columns: 42% 1fr;
+  gap: 12px;
+}
+.suite-toolbar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.suite-summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
 }
 code {
   color: #4b6078;

@@ -314,6 +314,8 @@ class ApiCase(Base, BaseMixin):
     body_type = db.Column(db.String(40), nullable=True, default="json")
     body = db.Column(db.TEXT(65533), nullable=True)
     assertions = db.Column(db.TEXT(65533), nullable=True)
+    pre_case_ids = db.Column(db.TEXT(65533), nullable=True)
+    extractors = db.Column(db.TEXT(65533), nullable=True)
     description = db.Column(db.String(1000), nullable=True, default="")
     last_status = db.Column(db.Integer, nullable=True)
     last_success = db.Column(db.Integer, nullable=True)
@@ -338,4 +340,35 @@ class ApiRunResult(Base, BaseMixin):
     elapsed_ms = db.Column(db.Integer, nullable=True)
     success = db.Column(db.Integer, nullable=True, default=0)
     assertion_result = db.Column(db.TEXT(65533), nullable=True)
+    error_message = db.Column(db.TEXT(65533), nullable=True)
+
+
+class ApiSuite(Base, BaseMixin):
+    """接口测试集合/场景表"""
+    __tablename__ = 'api_suite'
+    name = db.Column(db.String(191), nullable=False, index=True)
+    project_id = db.Column(db.Integer, nullable=True, index=True)
+    environment_id = db.Column(db.Integer, nullable=True, index=True)
+    case_ids = db.Column(db.TEXT(65533), nullable=True)
+    stop_on_fail = db.Column(db.Integer, nullable=True, default=1)
+    description = db.Column(db.String(1000), nullable=True, default="")
+    last_success = db.Column(db.Integer, nullable=True)
+    last_elapsed_ms = db.Column(db.Integer, nullable=True)
+    last_run_time = db.Column(db.DateTime, nullable=True)
+    is_delete = db.Column(db.Integer, nullable=True, default=0)
+
+
+class ApiSuiteRunResult(Base, BaseMixin):
+    """接口测试集合执行结果表"""
+    __tablename__ = 'api_suite_run_result'
+    suite_id = db.Column(db.Integer, nullable=True, index=True)
+    project_id = db.Column(db.Integer, nullable=True, index=True)
+    environment_id = db.Column(db.Integer, nullable=True, index=True)
+    total_count = db.Column(db.Integer, nullable=True, default=0)
+    pass_count = db.Column(db.Integer, nullable=True, default=0)
+    fail_count = db.Column(db.Integer, nullable=True, default=0)
+    elapsed_ms = db.Column(db.Integer, nullable=True)
+    success = db.Column(db.Integer, nullable=True, default=0)
+    context = db.Column(db.TEXT(65533), nullable=True)
+    step_results = db.Column(db.TEXT(65533), nullable=True)
     error_message = db.Column(db.TEXT(65533), nullable=True)

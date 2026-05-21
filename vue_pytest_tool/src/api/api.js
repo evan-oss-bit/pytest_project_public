@@ -95,6 +95,26 @@ export const run_api_case = (params) => {
 export const get_api_run_history = (params) => {
   return axios.post(`${base}/api_test/get_run_history`, params);
 };
+//接口测试-集合列表
+export const get_api_suite_info = (params) => {
+  return axios.post(`${base}/api_test/get_suite_info`, params);
+};
+//接口测试-保存集合
+export const save_api_suite = (params) => {
+  return axios.post(`${base}/api_test/save_suite`, params);
+};
+//接口测试-删除集合
+export const delete_api_suite = (params) => {
+  return axios.post(`${base}/api_test/delete_suite`, params);
+};
+//接口测试-运行集合
+export const run_api_suite = (params) => {
+  return axios.post(`${base}/api_test/run_suite`, params);
+};
+//接口测试-集合历史
+export const get_api_suite_history = (params) => {
+  return axios.post(`${base}/api_test/get_suite_history`, params);
+};
 //业务部门-获取业务部门列表
 export const get_business_department_info = (params) => {
   return axios.post(`${base}/business_department/get_business_department_info`, params);
