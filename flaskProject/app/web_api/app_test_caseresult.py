@@ -78,6 +78,25 @@ def _normalize_source_type(value):
     return lower_value
 
 
+def _normalize_run_id_filter(value):
+    if value in (None, ""):
+        return None
+    text_value = str(value).strip()
+    if not text_value:
+        return None
+    digit_match = re.search(r"\d{8,}", text_value)
+    if digit_match:
+        return int(digit_match.group(0))
+    try:
+        return int(text_value)
+    except Exception:
+        return None
+
+
+def _run_id_text(value):
+    return str(value) if value not in (None, "") else ""
+
+
 def _safe_log_file_path(file_name):
     if not file_name:
         return None
@@ -534,6 +553,7 @@ def get_caseresult_info():
     case_name = request.json.get("case_name", "")
     case_name = case_name.strip()
     run_id = request.json.get("run_id")
+    run_id_value = _normalize_run_id_filter(run_id)
     run_case_result = request.json.get("run_case_result")
     source_type = _normalize_source_type(request.json.get("source_type", ""))
     page_no = request.json.get("page", 0)
@@ -555,10 +575,10 @@ def get_caseresult_info():
         "page_size": page_size,
     })
     run_cache_key = _caseresult_cache_key(allowed_ids, "run_id", {
-        "run_id": run_id,
+        "run_id": run_id_value,
         "page": page_no,
         "page_size": page_size,
-    }) if run_id else None
+    }) if run_id_value else None
     case_cache_key = _caseresult_cache_key(allowed_ids, "case_id", {
         "case_id": case_id,
         "page": page_no,
@@ -603,21 +623,21 @@ def get_caseresult_info():
         #             page_no).all()
         # else:
         #     query = CaseResult.query.order_by(db.desc(CaseResult.updated_time)).limit(page_size).offset(page_no).all()
-        if page_size and not case_name and not set_id and not time_value and not run_case_result and not run_id and not case_id and not source_type:
+        if page_size and not case_name and not set_id and not time_value and not run_case_result and not run_id_value and not case_id and not source_type:
             return_dict = cache_operatios.new_conn.get(all_data)
             if return_dict:
                 print("获取缓存数据2")
                 return_dict = json.loads(return_dict)
                 return_dict.update({"cache_msg": "这是直接从redis缓存中获取的数据"})
                 return return_dict
-        if run_id and not case_name and not set_id and not time_value and not run_case_result and not source_type:
+        if run_id_value and not case_name and not set_id and not time_value and not run_case_result and not source_type:
             return_dict = cache_operatios.new_conn.get(run_cache_key)
             if return_dict:
                 print("获取缓存数据1")
                 return_dict = json.loads(return_dict)
                 return_dict.update({"cache_msg": "这是直接从redis缓存中获取的数据"})
                 return return_dict
-        if case_id and not case_name and not set_id and not time_value and not run_case_result and not run_id and not source_type:
+        if case_id and not case_name and not set_id and not time_value and not run_case_result and not run_id_value and not source_type:
             return_dict = cache_operatios.new_conn.get(case_cache_key)
             if return_dict:
                 print("获取缓存数据3>>>>case_id")
@@ -634,8 +654,8 @@ def get_caseresult_info():
 
         if set_id:
             query = query.filter_by(set_id=set_id)
-            # if run_id:
-            #     query = query.filter_by(run_id=int(run_id))
+            # if run_id_value:
+            #     query = query.filter_by(run_id=run_id_value)
             # if run_case_result:
             #     query = query.filter_by(run_case_result=run_case_result)
         if run_case_result:
@@ -646,8 +666,8 @@ def get_caseresult_info():
             query = query.filter(
                 CaseResult.case_name.like(f"%{case_name}%") | CaseResult.case_title.like(f"%{case_name}%")
             )
-        if run_id:
-            query = query.filter_by(run_id=int(run_id))
+        if run_id_value:
+            query = query.filter_by(run_id=run_id_value)
         if case_id is not None:
             query = query.filter_by(case_id=int(case_id))
             # if run_case_result:
@@ -711,6 +731,7 @@ def get_caseresult_info():
                         query[i].update({"version": j.get("version")})
         for i in query:
             i["source_type"] = i.get("source_type") or "pytest"
+            i["run_id"] = _run_id_text(i.get("run_id"))
             i["source_type_name"] = "接口测试" if i.get("source_type") == "api" else "pytest"
             if i.get("updated_time"):
                 i.update({"updated_time": i.get("updated_time").strftime("%Y-%m-%d %H:%M:%S")})
@@ -733,15 +754,15 @@ def get_caseresult_info():
         return_dict = {'code': 200, 'msg': '请求成功', 'data': query,
                        'count': {'pass_count': pass_count, 'fail_count': fail_count, 'error_count': error_count,
                                  'all_count': len(query), 'pass_rate': pass_rate}}
-        if run_id and not case_name and not set_id and not time_value and not run_case_result and not source_type:
+        if run_id_value and not case_name and not set_id and not time_value and not run_case_result and not source_type:
             cache_dict = json.dumps(return_dict, cls=cache_operatios.DecimalEncoder)
             cache_operatios.new_conn.set(run_cache_key, cache_dict, ex=60 * 1)
             print("存储缓存数据1")
-        if page_size and not case_name and not set_id and not time_value and not run_case_result and not run_id and not case_id and not source_type:
+        if page_size and not case_name and not set_id and not time_value and not run_case_result and not run_id_value and not case_id and not source_type:
             cache_dict = json.dumps(return_dict, cls=cache_operatios.DecimalEncoder)
             cache_operatios.new_conn.set(all_data, cache_dict, ex=60 * 1)
             print("存储缓存数据2")
-        if case_id and not case_name and not set_id and not time_value and not run_case_result and not run_id and not source_type:
+        if case_id and not case_name and not set_id and not time_value and not run_case_result and not run_id_value and not source_type:
             cache_dict = json.dumps(return_dict, cls=cache_operatios.DecimalEncoder)
             cache_operatios.new_conn.set(case_cache_key, cache_dict, ex=60 * 1)
             print("存储缓存数据3>>>>case_id")

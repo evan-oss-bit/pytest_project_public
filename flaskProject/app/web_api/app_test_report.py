@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 import datetime
 import os
+import re
 import traceback
 
 import yagmail
@@ -66,9 +67,30 @@ def _format_dt(value):
     return value.strftime("%Y-%m-%d %H:%M:%S") if value else ""
 
 
+def _run_id_text(value):
+    return str(value) if value not in (None, "") else ""
+
+
+def _display_api_report_title(item, run_id):
+    title = item.title or ""
+    if not run_id:
+        return title
+    run_id_text = str(run_id)
+    if re.search(r"run_id\s*\d+", title):
+        return re.sub(r"run_id\s*\d+", "run_id {}".format(run_id_text), title, count=1)
+    if item.target_type == "suite":
+        parts = title.split(" - ")
+        if len(parts) >= 2:
+            suffix = " - " + " - ".join(parts[2:]) if len(parts) > 2 else ""
+            return "{} - {} - run_id {}{}".format(parts[0], parts[1], run_id_text, suffix)
+    return title
+
+
 def _api_report_row(item):
+    run_id = item.run_id
     row = item.to_dict()
     row.update({
+        "title": _display_api_report_title(item, run_id),
         "report_source": "api",
         "report_source_name": "接口测试",
         "project_name": "接口测试",
@@ -76,7 +98,7 @@ def _api_report_row(item):
         "set_title": item.target_name or "",
         "report_path": item.report_path or "",
         "mark": "接口测试",
-        "run_id": item.run_id or item.suite_result_id or item.run_result_id,
+        "run_id": _run_id_text(run_id),
         "all_count": item.total_count or 0,
         "pass_count": item.pass_count or 0,
         "fail_count": item.fail_count or 0,
@@ -167,7 +189,7 @@ def get_report_info():
             if title:
                 api_query = api_query.filter(ApiReport.title.like(f"%{title}%"))
             if run_id:
-                api_query = api_query.filter((ApiReport.run_id == run_id) | (ApiReport.run_result_id == run_id) | (ApiReport.suite_result_id == run_id))
+                api_query = api_query.filter(ApiReport.run_id == run_id)
             api_rows = api_query.order_by(db.desc(ApiReport.updated_time)).limit(page_size).offset(page_no).all()
             return jsonify({'code': 200, 'msg': '请求成功', 'data': [_api_report_row(i) for i in api_rows]})
         if set_id:
@@ -245,7 +267,7 @@ def get_report_info():
             if title:
                 api_query = api_query.filter(ApiReport.title.like(f"%{title}%"))
             if run_id:
-                api_query = api_query.filter((ApiReport.run_id == run_id) | (ApiReport.run_result_id == run_id) | (ApiReport.suite_result_id == run_id))
+                api_query = api_query.filter(ApiReport.run_id == run_id)
             api_rows = api_query.order_by(db.desc(ApiReport.updated_time)).limit(page_size).offset(page_no).all()
             query.extend([_api_report_row(i) for i in api_rows])
             query = sorted(query, key=lambda item: item.get("updated_time") or "", reverse=True)

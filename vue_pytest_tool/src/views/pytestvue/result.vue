@@ -665,7 +665,7 @@ export default {
             let para = {
                 case_name: this.filters.cfg_name,
                 run_case_result: this.value2,
-                run_id: this.filters.run_id,
+                run_id: this.filters.run_id ? String(this.filters.run_id).trim() : null,
                 page: this.page,
                 page_size: page_siz,
                 set_id: selectedSetId,

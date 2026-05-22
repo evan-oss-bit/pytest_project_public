@@ -28,6 +28,9 @@ API_CASE_EXTRA_COLUMNS = {
     "extractors": "TEXT",
 }
 API_RUNTIME_EXTRA_COLUMNS = {
+    "api_suite": {
+        "dependency_strategy": "VARCHAR(40) DEFAULT 'retry_on_auth_fail'",
+    },
     "api_run_result": {
         "run_id": "BIGINT DEFAULT 0",
         "run_status": "VARCHAR(40) DEFAULT 'finished'",
@@ -115,6 +118,10 @@ def _format_time(value):
     return value.strftime("%Y-%m-%d %H:%M:%S") if value else ""
 
 
+def _run_id_text(value):
+    return str(value) if value not in (None, "") else ""
+
+
 def _new_api_run_id():
     return int(datetime.datetime.now().strftime("%Y%m%d%H%M%S%f")[:17] + str(int(time.time() * 1000000) % 100).zfill(2))
 
@@ -124,9 +131,33 @@ def _api_run_id_from(data):
     return run_id or _new_api_run_id()
 
 
+def _normalize_dependency_strategy(value):
+    value = str(value or "").strip()
+    if value in ("once", "always", "retry_on_auth_fail"):
+        return value
+    return "retry_on_auth_fail"
+
+
+def _is_auth_failure(result):
+    if not result:
+        return False
+    if result.response_status in (401, 403):
+        return True
+    body = result.response_body or ""
+    try:
+        parsed = json.loads(body)
+        if _int_or_none(parsed.get("code")) in (401, 403):
+            return True
+    except Exception:
+        pass
+    return False
+
+
 def _api_report_filename(target_type, run_id):
+    if not run_id:
+        raise ValueError("api report run_id is required")
     safe_type = re.sub(r"[^A-Za-z0-9_-]+", "_", str(target_type or "case")).strip("_") or "case"
-    return "api_{}_{}.html".format(safe_type, run_id or _new_api_run_id())
+    return "api_{}_{}.html".format(safe_type, run_id)
 
 
 def _display_text(value):
@@ -152,7 +183,9 @@ def _result_status_text(success):
 def _write_api_report_file(report, detail=None):
     detail = detail or _loads(report.detail, {})
     summary = _loads(report.summary, {})
-    run_id = report.run_id or report.suite_result_id or report.run_result_id or _new_api_run_id()
+    run_id = report.run_id
+    if not run_id:
+        raise ValueError("api report run_id is required")
     filename = report.report_path or _api_report_filename(report.target_type, run_id)
     os.makedirs(report_path, exist_ok=True)
     report_root = os.path.realpath(report_path)
@@ -290,6 +323,7 @@ def _environment_payload(item):
 
 def _result_payload(item):
     data = _with_time(item.to_dict())
+    data["run_id"] = _run_id_text(data.get("run_id"))
     data["request_headers"] = _loads(data.get("request_headers"), {})
     data["request_params"] = _loads(data.get("request_params"), {})
     data["response_headers"] = _loads(data.get("response_headers"), {})
@@ -316,6 +350,8 @@ def _copy_result_fields(target, payload):
     ]:
         if name in payload and hasattr(target, name):
             value = payload.get(name)
+            if name == "run_id":
+                value = _int_or_none(value)
             if name in ("request_headers", "request_params", "response_headers", "assertion_result") and not isinstance(value, str):
                 value = _json_text(value)
             setattr(target, name, value)
@@ -337,19 +373,25 @@ def _suite_payload(item):
         for case in cases
     ]
     data["stop_on_fail"] = 1 if data.get("stop_on_fail") else 0
+    data["dependency_strategy"] = _normalize_dependency_strategy(data.get("dependency_strategy"))
     data["last_run_time"] = _format_time(data.get("last_run_time"))
     return data
 
 
 def _suite_result_payload(item):
     data = _with_time(item.to_dict())
+    data["run_id"] = _run_id_text(data.get("run_id"))
     data["context"] = _loads(data.get("context"), {})
     data["step_results"] = _loads(data.get("step_results"), [])
+    for step in data["step_results"]:
+        if isinstance(step, dict) and "run_id" in step:
+            step["run_id"] = _run_id_text(step.get("run_id"))
     return data
 
 
 def _api_report_payload(item):
     data = _with_time(item.to_dict())
+    data["run_id"] = _run_id_text(data.get("run_id"))
     data["summary"] = _loads(data.get("summary"), {})
     data["detail"] = _loads(data.get("detail"), {})
     data["report_source"] = "api"
@@ -791,7 +833,9 @@ def _create_api_case_report(result, payload=None, title_prefix="接口用例"):
     payload = payload or _result_payload(result)
     case = ApiCase.query.filter_by(id=result.case_id, is_delete=0).first() if result.case_id else None
     assertions = payload.get("assertion_result") or []
-    run_id = result.run_id or result.id
+    run_id = result.run_id
+    if not run_id:
+        raise ValueError("api case report run_id is required")
     report = ApiReport(
         title="{} - {} - {}".format(title_prefix, (case.name if case else payload.get("url") or "临时请求"), _format_time(datetime.datetime.now())),
         report_type="api",
@@ -842,7 +886,9 @@ def _create_api_case_execution_result(result, suite_result_id=None):
         return exists
     case = ApiCase.query.filter_by(id=result.case_id, is_delete=0).first() if result.case_id else None
     detail = _result_payload(result)
-    run_id = result.run_id or suite_result_id or result.id
+    run_id = result.run_id
+    if not run_id:
+        raise ValueError("api case result run_id is required")
     row = CaseResult(
         case_title=(case.name if case else result.url or "接口临时请求"),
         case_name="{} {}".format(result.method or "", result.url or "").strip(),
@@ -886,9 +932,15 @@ def _create_api_case_execution_result(result, suite_result_id=None):
 def _create_api_suite_report(suite_result, suite=None):
     suite = suite or ApiSuite.query.filter_by(id=suite_result.suite_id, is_delete=0).first()
     step_results = _loads(suite_result.step_results, [])
-    run_id = suite_result.run_id or suite_result.id
+    run_id = suite_result.run_id
+    if not run_id:
+        raise ValueError("api suite report run_id is required")
     report = ApiReport(
-        title="接口集合 - {} - {}".format((suite.name if suite else "集合{}".format(suite_result.suite_id)), _format_time(datetime.datetime.now())),
+        title="接口集合 - {} - run_id {} - {}".format(
+            (suite.name if suite else "集合{}".format(suite_result.suite_id)),
+            run_id,
+            _format_time(datetime.datetime.now()),
+        ),
         report_type="api",
         target_type="suite",
         target_id=suite_result.suite_id,
@@ -963,8 +1015,9 @@ def _run_suite_background(app, suite_result_id, suite_id, environment_id, timeou
             return
         started = time.time()
         try:
-            suite_run_id = run_id or suite_result.run_id or _new_api_run_id()
-            suite_result.run_id = suite_run_id
+            suite_run_id = suite_result.run_id
+            if not suite_run_id:
+                raise ValueError("api suite run_id is required")
             suite_result.run_status = "running"
             suite_result.status_text = "执行中"
             db.session.commit()
@@ -975,6 +1028,7 @@ def _run_suite_background(app, suite_result_id, suite_id, environment_id, timeou
             pass_count = 0
             fail_count = 0
             executed_success_case_ids = set()
+            dependency_strategy = _normalize_dependency_strategy(suite.dependency_strategy)
             for index, case in enumerate(cases):
                 try:
                     chain = _resolve_dependency_order(case)
@@ -998,11 +1052,14 @@ def _run_suite_background(app, suite_result_id, suite_id, environment_id, timeou
                     continue
                 for chain_case in chain:
                     is_suite_item = chain_case.id == case.id
-                    if not is_suite_item and chain_case.id in executed_success_case_ids:
+                    if dependency_strategy != "always" and not is_suite_item and chain_case.id in executed_success_case_ids:
                         continue
                     running_step = {
                         "case_id": chain_case.id,
                         "case_name": chain_case.name,
+                        "is_suite_item": is_suite_item,
+                        "step_type": "case" if is_suite_item else "dependency",
+                        "step_type_name": "集合接口" if is_suite_item else "前置依赖",
                         "success": None,
                         "run_status": "running",
                         "status_text": "执行中",
@@ -1013,6 +1070,46 @@ def _run_suite_background(app, suite_result_id, suite_id, environment_id, timeou
                     db.session.commit()
                     source = _case_payload(chain_case)
                     result, extracted = _execute_case_source(source, case=chain_case, environment_id=environment_id, context=context, timeout=timeout, run_id=suite_run_id)
+                    if is_suite_item and dependency_strategy == "retry_on_auth_fail" and _is_auth_failure(result):
+                        db.session.expunge(result)
+                        for refresh_case in chain[:-1]:
+                            refresh_source = _case_payload(refresh_case)
+                            refresh_result, refresh_extracted = _execute_case_source(
+                                refresh_source,
+                                case=refresh_case,
+                                environment_id=environment_id,
+                                context=context,
+                                timeout=timeout,
+                                run_id=suite_run_id,
+                            )
+                            refresh_result.run_status = "finished"
+                            refresh_result.status_text = "执行完成"
+                            _apply_account_info(refresh_result, account_info)
+                            db.session.flush()
+                            _create_api_case_execution_result(refresh_result, suite_result_id=suite_result_id)
+                            context.update(refresh_extracted)
+                            refresh_payload = _result_payload(refresh_result)
+                            refresh_payload["case_name"] = refresh_case.name
+                            refresh_payload["case_id"] = refresh_case.id
+                            refresh_payload["suite_index"] = index + 1
+                            refresh_payload["is_suite_item"] = False
+                            refresh_payload["step_type"] = "dependency"
+                            refresh_payload["step_type_name"] = "刷新依赖"
+                            refresh_payload["extracted_variables"] = refresh_extracted
+                            refresh_payload["run_status"] = "finished" if refresh_result.success else "failed"
+                            refresh_payload["status_text"] = "通过" if refresh_result.success else "失败"
+                            step_results.append(refresh_payload)
+                            if refresh_result.success:
+                                pass_count += 1
+                                executed_success_case_ids.add(refresh_case.id)
+                            else:
+                                fail_count += 1
+                                if suite.stop_on_fail:
+                                    break
+                        if not suite.stop_on_fail or not step_results or step_results[-1].get("success"):
+                            result, extracted = _execute_case_source(source, case=chain_case, environment_id=environment_id, context=context, timeout=timeout, run_id=suite_run_id)
+                        else:
+                            break
                     result.run_status = "finished"
                     result.status_text = "执行完成"
                     _apply_account_info(result, account_info)
@@ -1023,6 +1120,9 @@ def _run_suite_background(app, suite_result_id, suite_id, environment_id, timeou
                     payload["case_name"] = chain_case.name
                     payload["case_id"] = chain_case.id
                     payload["suite_index"] = index + 1
+                    payload["is_suite_item"] = is_suite_item
+                    payload["step_type"] = "case" if is_suite_item else "dependency"
+                    payload["step_type_name"] = "集合接口" if is_suite_item else "前置依赖"
                     payload["extracted_variables"] = extracted
                     payload["run_status"] = "finished" if result.success else "failed"
                     payload["status_text"] = "通过" if result.success else "失败"
@@ -1349,6 +1449,7 @@ def save_suite():
     suite.environment_id = _int_or_none(data.get("environment_id"))
     suite.case_ids = _json_text(case_ids)
     suite.stop_on_fail = 1 if data.get("stop_on_fail", 1) else 0
+    suite.dependency_strategy = _normalize_dependency_strategy(data.get("dependency_strategy"))
     suite.description = data.get("description") or ""
     db.session.add(suite)
     db.session.commit()
@@ -1421,6 +1522,7 @@ def run_suite():
     pass_count = 0
     fail_count = 0
     executed_success_case_ids = set()
+    dependency_strategy = _normalize_dependency_strategy(suite.dependency_strategy)
     for index, case in enumerate(cases):
         try:
             chain = _resolve_dependency_order(case)
@@ -1432,10 +1534,46 @@ def run_suite():
             continue
         for chain_case in chain:
             is_suite_item = chain_case.id == case.id
-            if not is_suite_item and chain_case.id in executed_success_case_ids:
+            if dependency_strategy != "always" and not is_suite_item and chain_case.id in executed_success_case_ids:
                 continue
             source = _case_payload(chain_case)
             result, extracted = _execute_case_source(source, case=chain_case, environment_id=environment_id, context=context, timeout=timeout, run_id=run_id)
+            if is_suite_item and dependency_strategy == "retry_on_auth_fail" and _is_auth_failure(result):
+                db.session.expunge(result)
+                for refresh_case in chain[:-1]:
+                    refresh_source = _case_payload(refresh_case)
+                    refresh_result, refresh_extracted = _execute_case_source(
+                        refresh_source,
+                        case=refresh_case,
+                        environment_id=environment_id,
+                        context=context,
+                        timeout=timeout,
+                        run_id=run_id,
+                    )
+                    db.session.flush()
+                    _create_api_case_execution_result(refresh_result)
+                    context.update(refresh_extracted)
+                    refresh_payload = _result_payload(refresh_result)
+                    refresh_payload["case_name"] = refresh_case.name
+                    refresh_payload["case_id"] = refresh_case.id
+                    refresh_payload["suite_index"] = index + 1
+                    refresh_payload["is_suite_item"] = False
+                    refresh_payload["step_type"] = "dependency"
+                    refresh_payload["step_type_name"] = "刷新依赖"
+                    refresh_payload["extracted_variables"] = refresh_extracted
+                    step_results.append(refresh_payload)
+                    if refresh_result.success:
+                        pass_count += 1
+                        executed_success_case_ids.add(refresh_case.id)
+                    else:
+                        fail_count += 1
+                        db.session.commit()
+                        if suite.stop_on_fail:
+                            break
+                if not suite.stop_on_fail or not step_results or step_results[-1].get("success"):
+                    result, extracted = _execute_case_source(source, case=chain_case, environment_id=environment_id, context=context, timeout=timeout, run_id=run_id)
+                else:
+                    break
             db.session.flush()
             _create_api_case_execution_result(result)
             context.update(extracted)
@@ -1443,6 +1581,9 @@ def run_suite():
             payload["case_name"] = chain_case.name
             payload["case_id"] = chain_case.id
             payload["suite_index"] = index + 1
+            payload["is_suite_item"] = is_suite_item
+            payload["step_type"] = "case" if is_suite_item else "dependency"
+            payload["step_type_name"] = "集合接口" if is_suite_item else "前置依赖"
             payload["extracted_variables"] = extracted
             step_results.append(payload)
             if result.success:

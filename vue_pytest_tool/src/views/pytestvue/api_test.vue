@@ -91,6 +91,7 @@
             </div>
             <div class="api-main-status">
               <el-tag v-if="lastResult" :type="resultTagType(lastResult)">{{ resultStatusText(lastResult) }}</el-tag>
+              <span v-if="lastResult && lastResult.run_id">run_id {{ lastResult.run_id }}</span>
               <span v-if="lastResult">Status {{ lastResult.response_status || "-" }} · {{ lastResult.elapsed_ms || 0 }} ms</span>
               <span v-else>{{ sideMode === "case" ? "未执行" : ((suiteForm.case_ids || []).length + " 个接口") }}</span>
             </div>
@@ -304,7 +305,12 @@
                       </el-select>
                     </el-form-item>
                     <el-form-item label="备注">
-                      <el-input v-model="suiteForm.description" type="textarea" :rows="2"></el-input>
+                      <el-select v-model="suiteForm.dependency_strategy" placeholder="依赖刷新策略" style="margin-bottom: 8px">
+                      <el-option label="前置依赖只执行一次" value="once"></el-option>
+                      <el-option label="每个接口前都执行依赖" value="always"></el-option>
+                      <el-option label="认证失败自动刷新并重试" value="retry_on_auth_fail"></el-option>
+                    </el-select>
+                    <el-input v-model="suiteForm.description" type="textarea" :rows="2"></el-input>
                     </el-form-item>
                     <el-form-item>
                       <el-button type="primary" icon="el-icon-check" @click="saveSuite">保存集合</el-button>
@@ -368,6 +374,11 @@
                 </el-col>
                 <el-col :span="12">
                   <el-form-item label="备注">
+                    <el-select v-model="suiteForm.dependency_strategy" placeholder="依赖刷新策略" style="margin-bottom: 8px">
+                      <el-option label="前置依赖只执行一次" value="once"></el-option>
+                      <el-option label="每个接口前都执行依赖" value="always"></el-option>
+                      <el-option label="认证失败自动刷新并重试" value="retry_on_auth_fail"></el-option>
+                    </el-select>
                     <el-input v-model="suiteForm.description" placeholder="集合用途或执行说明"></el-input>
                   </el-form-item>
                 </el-col>
@@ -588,7 +599,10 @@
                 <div v-else-if="suiteResult">
                   <div class="suite-summary">
                     <el-tag :type="resultTagType(suiteResult)">{{ resultStatusText(suiteResult) }}</el-tag>
-                    <strong>总 {{ suiteResult.total_count || 0 }}</strong>
+                    <span v-if="suiteResult.run_id">run_id {{ suiteResult.run_id }}</span>
+                    <strong>集合 {{ suiteSelectedResultCount }}</strong>
+                    <span>实际 {{ suiteExecutionStepCount }}</span>
+                    <span v-if="suiteDependencyCount">前置 {{ suiteDependencyCount }}</span>
                     <span>通过 {{ suiteResult.pass_count || 0 }}</span>
                     <span>失败 {{ suiteResult.fail_count || 0 }}</span>
                     <span>耗时 {{ suiteResult.elapsed_ms || 0 }} ms</span>
@@ -602,6 +616,11 @@
                     height="300"
                     @row-click="selectSuiteStepResult">
                     <el-table-column prop="suite_index" label="#" width="55"></el-table-column>
+                    <el-table-column label="类型" width="88">
+                      <template slot-scope="scope">
+                        <el-tag size="mini" :type="suiteStepTypeTag(scope.row)">{{ suiteStepTypeText(scope.row) }}</el-tag>
+                      </template>
+                    </el-table-column>
                     <el-table-column prop="case_name" label="接口" min-width="180"></el-table-column>
                     <el-table-column prop="method" label="方法" width="75"></el-table-column>
                     <el-table-column prop="response_status" label="状态" width="75"></el-table-column>
@@ -699,6 +718,7 @@ function emptySuite() {
     case_ids: [],
     case_list: [],
     stop_on_fail: true,
+    dependency_strategy: "retry_on_auth_fail",
     description: "",
   };
 }
@@ -844,6 +864,19 @@ export default {
           return String(item.fullLabel || item.label || "").toLowerCase().indexOf(keyword) !== -1;
         });
     },
+    suiteStepRows() {
+      return this.suiteResult && Array.isArray(this.suiteResult.step_results) ? this.suiteResult.step_results : [];
+    },
+    suiteDependencyCount() {
+      const selectedIds = new Set(this.suiteForm.case_ids || []);
+      return this.suiteStepRows.filter((row) => row.step_type === "dependency" || row.is_suite_item === false || !selectedIds.has(row.case_id)).length;
+    },
+    suiteExecutionStepCount() {
+      return this.suiteStepRows.length || (this.suiteResult ? (this.suiteResult.total_count || 0) : 0);
+    },
+    suiteSelectedResultCount() {
+      return Math.max(0, this.suiteExecutionStepCount - this.suiteDependencyCount);
+    },
     bodyPlaceholder() {
       return this.currentCase.body_type === "form" ? '{"username": "admin"}' : '{\n  "name": "demo"\n}';
     },
@@ -966,6 +999,46 @@ export default {
         return "-";
       }
       return row.success ? "通过" : "失败";
+    },
+    suiteStepTypeText(row) {
+      if (!row) {
+        return "-";
+      }
+      if (row.step_type_name) {
+        return row.step_type_name;
+      }
+      const selectedIds = new Set(this.suiteForm.case_ids || []);
+      return row.step_type === "dependency" || row.is_suite_item === false || !selectedIds.has(row.case_id) ? "前置依赖" : "集合接口";
+    },
+    suiteStepTypeTag(row) {
+      return this.suiteStepTypeText(row) === "前置依赖" ? "warning" : "primary";
+    },
+    isSuiteDependencyStep(row) {
+      if (!row) {
+        return false;
+      }
+      const selectedIds = new Set(this.suiteForm.case_ids || []);
+      return row.step_type === "dependency" || row.step_type_name === "刷新依赖" || row.is_suite_item === false || !selectedIds.has(row.case_id);
+    },
+    suiteStepChainResults(row) {
+      if (!row || row.chain_results && row.chain_results.length) {
+        return row && row.chain_results ? row.chain_results : [];
+      }
+      const steps = this.suiteStepRows;
+      const index = steps.indexOf(row);
+      if (index < 0) {
+        return [];
+      }
+      const suiteIndex = row.suite_index;
+      const chain = [];
+      for (let i = index - 1; i >= 0; i -= 1) {
+        const item = steps[i];
+        if (item.suite_index !== suiteIndex || !this.isSuiteDependencyStep(item)) {
+          break;
+        }
+        chain.unshift(item);
+      }
+      return chain;
     },
     caseResultTagType(option) {
       if (!option || option.last_success === null || option.last_success === undefined) {
@@ -1301,6 +1374,7 @@ export default {
         case_ids: row.case_ids || [],
         case_list: row.case_list || [],
         stop_on_fail: !!row.stop_on_fail,
+        dependency_strategy: row.dependency_strategy || "retry_on_auth_fail",
         description: row.description || "",
       };
       this.rememberCaseOptions(this.suiteForm.case_list);
@@ -1313,6 +1387,7 @@ export default {
     async saveSuite() {
       const payload = Object.assign({}, this.suiteForm, {
         stop_on_fail: this.suiteForm.stop_on_fail ? 1 : 0,
+        dependency_strategy: this.suiteForm.dependency_strategy || "retry_on_auth_fail",
       });
       const res = await save_api_suite(payload);
       if (!res.data || res.data.code !== 200) {
@@ -1339,7 +1414,7 @@ export default {
           return;
         }
         this.suiteResult = res.data.data;
-        this.lastResult = { success: this.suiteResult.success, run_status: this.suiteResult.run_status, status_text: this.suiteResult.status_text, response_status: "-", elapsed_ms: this.suiteResult.elapsed_ms, assertion_result: [], extractor_result: [] };
+        this.lastResult = { success: this.suiteResult.success, run_status: this.suiteResult.run_status, status_text: this.suiteResult.status_text, response_status: "-", elapsed_ms: this.suiteResult.elapsed_ms, run_id: this.suiteResult.run_id, assertion_result: [], extractor_result: [] };
         this.responseTab = "suite_result";
         this.pollSuiteResult(this.suiteResult.id);
       }).catch(() => {
@@ -1360,7 +1435,7 @@ export default {
       get_api_suite_result({ id: resultId }).then((res) => {
         if (res.data && res.data.code === 200) {
           this.suiteResult = res.data.data;
-          this.lastResult = { success: this.suiteResult.success, run_status: this.suiteResult.run_status, status_text: this.suiteResult.status_text, response_status: "-", elapsed_ms: this.suiteResult.elapsed_ms, assertion_result: [], extractor_result: [] };
+          this.lastResult = { success: this.suiteResult.success, run_status: this.suiteResult.run_status, status_text: this.suiteResult.status_text, response_status: "-", elapsed_ms: this.suiteResult.elapsed_ms, run_id: this.suiteResult.run_id, assertion_result: [], extractor_result: [] };
           const status = this.suiteResult.run_status;
           if (status === "queued" || status === "running") {
             this.suitePollTimer = setTimeout(() => this.pollSuiteResult(resultId), 1000);
@@ -1417,6 +1492,7 @@ export default {
         status_text: row.status_text,
         response_status: "-",
         elapsed_ms: row.elapsed_ms,
+        run_id: row.run_id,
         assertion_result: [],
         extractor_result: [],
       };
@@ -1430,7 +1506,7 @@ export default {
         case_name: row.case_name || row.name || "",
         assertion_result: row.assertion_result || [],
         extractor_result: row.extractor_result || [],
-        chain_results: row.chain_results || [],
+        chain_results: this.suiteStepChainResults(row),
       });
       this.responseTab = "body";
     },

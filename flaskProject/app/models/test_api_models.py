@@ -357,6 +357,7 @@ class ApiSuite(Base, BaseMixin):
     environment_id = db.Column(db.Integer, nullable=True, index=True)
     case_ids = db.Column(db.TEXT(65533), nullable=True)
     stop_on_fail = db.Column(db.Integer, nullable=True, default=1)
+    dependency_strategy = db.Column(db.String(40), nullable=True, default="retry_on_auth_fail")
     description = db.Column(db.String(1000), nullable=True, default="")
     last_success = db.Column(db.Integer, nullable=True)
     last_elapsed_ms = db.Column(db.Integer, nullable=True)
