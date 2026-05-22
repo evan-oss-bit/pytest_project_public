@@ -14,10 +14,6 @@ export const requestLogin = (params) => {
   }).then((res) => res.data);
 };
 
-export const get_captcha = () => {
-  return axios.get(`${base}/captcha`);
-};
-
 //账号权限-当前账号
 export const get_auth_me = (params) => {
   return axios.post(`${base}/auth/me`, params);
@@ -91,6 +87,10 @@ export const delete_api_case = (params) => {
 export const run_api_case = (params) => {
   return axios.post(`${base}/api_test/run_case`, params);
 };
+//接口测试-用例运行结果
+export const get_api_run_result = (params) => {
+  return axios.post(`${base}/api_test/get_run_result`, params);
+};
 //接口测试-运行历史
 export const get_api_run_history = (params) => {
   return axios.post(`${base}/api_test/get_run_history`, params);
@@ -111,9 +111,21 @@ export const delete_api_suite = (params) => {
 export const run_api_suite = (params) => {
   return axios.post(`${base}/api_test/run_suite`, params);
 };
+//接口测试-集合运行结果
+export const get_api_suite_result = (params) => {
+  return axios.post(`${base}/api_test/get_suite_result`, params);
+};
 //接口测试-集合历史
 export const get_api_suite_history = (params) => {
   return axios.post(`${base}/api_test/get_suite_history`, params);
+};
+//接口测试-报告列表
+export const get_api_report_info = (params) => {
+  return axios.post(`${base}/api_test/get_api_report_info`, params);
+};
+//接口测试-报告详情
+export const get_api_report_detail = (params) => {
+  return axios.post(`${base}/api_test/get_api_report_detail`, params);
 };
 //业务部门-获取业务部门列表
 export const get_business_department_info = (params) => {
@@ -385,6 +397,14 @@ export const get_caseresult_info = (params) => {
 //pytest自动化项目-py文件脚本代码审查
 export const get_log_info = (params) => {
   return axios.post(`${base}/caseresult/get_log_info`, params);
+};
+
+export const get_api_log_info = (params) => {
+  return axios.post(`${base}/caseresult/get_api_log_info`, params);
+};
+
+export const get_api_case_source_info = (params) => {
+  return axios.post(`${base}/caseresult/get_api_case_source_info`, params);
 };
 
 export const case_upload = (params) => {

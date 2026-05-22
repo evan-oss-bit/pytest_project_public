@@ -151,9 +151,6 @@ def login():
     basic_auth = request.authorization
     username = (data.get("username") or (basic_auth.username if basic_auth else "") or "").strip()
     password = data.get("password") or (basic_auth.password if basic_auth else "")
-    captcha_ok, captcha_msg = _check_captcha(data)
-    if not captcha_ok:
-        return jsonify({"code": 404, "msg": captcha_msg, "token": None, "name": None})
     account = Account.query.filter_by(username=username, is_delete=0).first()
     if not account or not _password_matches(account, password):
         return jsonify({"code": 404, "msg": "账号或密码错误", "token": None, "name": None})

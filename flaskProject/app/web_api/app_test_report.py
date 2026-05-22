@@ -6,15 +6,94 @@ import traceback
 
 import yagmail
 from flask import Response, jsonify, request
+from sqlalchemy import inspect, text
 
 from app.lib import image
 from app.lib.lib_define import db
-from app.models.test_api_models import CaseResult, Cfgs, Reports, TestSet
+from app.models.test_api_models import ApiReport, CaseResult, Cfgs, Reports, TestSet
 from app.tools import request_details
 from app.tools.auth_permissions import allowed_project_ids, project_id_from_report_path, require_project_permission
 from app.tools.util import EmailThread
 from app.web_api import report
 from config import report_path
+
+
+def _ensure_report_source_columns():
+    table_names = set(inspect(db.engine).get_table_names())
+    changed = False
+    if "caseresult" in table_names:
+        columns = {column["name"] for column in inspect(db.engine).get_columns("caseresult")}
+        ddl_map = {
+            "source_type": "ALTER TABLE caseresult ADD COLUMN source_type VARCHAR(40) DEFAULT 'pytest'",
+            "api_result_id": "ALTER TABLE caseresult ADD COLUMN api_result_id INTEGER",
+            "api_suite_result_id": "ALTER TABLE caseresult ADD COLUMN api_suite_result_id INTEGER",
+        }
+        for column_name, ddl in ddl_map.items():
+            if column_name not in columns:
+                db.session.execute(text(ddl))
+                changed = True
+        empty_count = db.session.execute(
+            text("SELECT COUNT(1) FROM caseresult WHERE source_type IS NULL OR source_type = ''")
+        ).scalar() or 0
+        if empty_count:
+            db.session.execute(text("UPDATE caseresult SET source_type = 'pytest' WHERE source_type IS NULL OR source_type = ''"))
+            changed = True
+    if "api_report" in table_names:
+        columns = {column["name"] for column in inspect(db.engine).get_columns("api_report")}
+        ddl_map = {
+            "run_id": "ALTER TABLE api_report ADD COLUMN run_id BIGINT DEFAULT 0",
+            "report_path": "ALTER TABLE api_report ADD COLUMN report_path VARCHAR(1000)",
+        }
+        for column_name, ddl in ddl_map.items():
+            if column_name not in columns:
+                db.session.execute(text(ddl))
+                changed = True
+    if changed:
+        db.session.commit()
+
+
+def _normalize_report_source(value):
+    value = str(value or "").strip()
+    lower_value = value.lower()
+    if lower_value in ("api", "interface") or value in ("接口测试", "接口"):
+        return "api"
+    if lower_value in ("pytest", "py") or value in ("pytest测试",):
+        return "pytest"
+    return lower_value
+
+
+def _format_dt(value):
+    return value.strftime("%Y-%m-%d %H:%M:%S") if value else ""
+
+
+def _api_report_row(item):
+    row = item.to_dict()
+    row.update({
+        "report_source": "api",
+        "report_source_name": "接口测试",
+        "project_name": "接口测试",
+        "set_id": item.target_id or 0,
+        "set_title": item.target_name or "",
+        "report_path": item.report_path or "",
+        "mark": "接口测试",
+        "run_id": item.run_id or item.suite_result_id or item.run_result_id,
+        "all_count": item.total_count or 0,
+        "pass_count": item.pass_count or 0,
+        "fail_count": item.fail_count or 0,
+        "error_count": 0,
+        "case_all_time": round((item.elapsed_ms or 0) / 1000, 4),
+        "pass_rate": round(((item.pass_count or 0) / (item.total_count or 1)) * 100, 2) if item.total_count else 0,
+        "cfg_name": [],
+        "updated_time": _format_dt(item.updated_time),
+    })
+    return row
+
+
+def _pytest_report_row(item):
+    row = item.to_dict()
+    row["report_source"] = "pytest"
+    row["report_source_name"] = "pytest"
+    return row
 
 
 def _safe_report_file_path(filename):
@@ -63,10 +142,12 @@ def _report_mimetype(report_name):
 
 @report.route('/get_report_info', methods=["POST"])
 def get_report_info():
+    _ensure_report_source_columns()
     """获取报告列表"""
     set_id = request.json.get("set_id")
     title = request.json.get("title", "")
     run_id = request.json.get("run_id")
+    report_source = _normalize_report_source(request.json.get("report_source", ""))
     title = title.strip()
     page_no = request.json.get("page", 0)
     page_size = request.json.get("page_size", 10)
@@ -77,6 +158,18 @@ def get_report_info():
         if permission_error:
             return permission_error
     try:
+        if report_source == "api":
+            api_query = ApiReport.query.filter_by(is_delete=0, report_type="api")
+            if allowed_ids is not None:
+                api_query = api_query.filter((ApiReport.project_id.in_(allowed_ids)) | (ApiReport.project_id.is_(None)))
+            if project_id:
+                api_query = api_query.filter(ApiReport.project_id == project_id)
+            if title:
+                api_query = api_query.filter(ApiReport.title.like(f"%{title}%"))
+            if run_id:
+                api_query = api_query.filter((ApiReport.run_id == run_id) | (ApiReport.run_result_id == run_id) | (ApiReport.suite_result_id == run_id))
+            api_rows = api_query.order_by(db.desc(ApiReport.updated_time)).limit(page_size).offset(page_no).all()
+            return jsonify({'code': 200, 'msg': '请求成功', 'data': [_api_report_row(i) for i in api_rows]})
         if set_id:
             if title:
                 query = Reports.query.filter_by(set_id=set_id).filter(Reports.title.like(f"%{title}%")).order_by(
@@ -102,7 +195,7 @@ def get_report_info():
             query = Reports.query.order_by(db.desc(Reports.updated_time)).limit(page_size).offset(page_no).all()
         if allowed_ids is not None:
             query = [item for item in query if item.project_id in allowed_ids]
-        query = [i.to_dict() for i in query]
+        query = [_pytest_report_row(i) for i in query]
         set_ids = image.get_values_by_key(query, "set_id", values=[])
         if isinstance(set_ids, int):
             set_ids = [set_ids]
@@ -143,6 +236,19 @@ def get_report_info():
         for i in query:
             if i.get("updated_time"):
                 i.update({"updated_time": i.get("updated_time").strftime("%Y-%m-%d %H:%M:%S")})
+        if report_source != "pytest" and not set_id:
+            api_query = ApiReport.query.filter_by(is_delete=0, report_type="api")
+            if allowed_ids is not None:
+                api_query = api_query.filter((ApiReport.project_id.in_(allowed_ids)) | (ApiReport.project_id.is_(None)))
+            if project_id:
+                api_query = api_query.filter(ApiReport.project_id == project_id)
+            if title:
+                api_query = api_query.filter(ApiReport.title.like(f"%{title}%"))
+            if run_id:
+                api_query = api_query.filter((ApiReport.run_id == run_id) | (ApiReport.run_result_id == run_id) | (ApiReport.suite_result_id == run_id))
+            api_rows = api_query.order_by(db.desc(ApiReport.updated_time)).limit(page_size).offset(page_no).all()
+            query.extend([_api_report_row(i) for i in api_rows])
+            query = sorted(query, key=lambda item: item.get("updated_time") or "", reverse=True)
         return jsonify({'code': 200, 'msg': '请求成功', 'data': query})
     except Exception:
         print(traceback.print_exc())
@@ -155,6 +261,21 @@ def report_content():
     """获取测试报告内容"""
     filename = request.json.get("filename")
     set_id = request.json.get("set_id")
+    if filename:
+        api_query = ApiReport.query.filter_by(report_path=filename, is_delete=0).order_by(
+            db.desc(ApiReport.updated_time)).first()
+        if api_query:
+            if api_query.project_id:
+                permission_error = require_project_permission(api_query.project_id, "view")
+                if permission_error:
+                    return permission_error
+            report_allpath = _safe_report_file_path(api_query.report_path)
+            if not report_allpath:
+                return jsonify({"code": 404, "msg": "æµ‹è¯•æŠ¥å‘Šè·¯å¾„ä¸åˆæ³•ï¼", "data": None})
+            if not os.path.exists(report_allpath):
+                return jsonify({"code": 404, "msg": "æµ‹è¯•æŠ¥å‘Šä¸å­˜åœ¨ï¼", "data": None})
+            with open(report_allpath, "rb") as f:
+                return Response(f.read(), mimetype=_report_mimetype(api_query.report_path))
     if not filename:
         return jsonify({"code": 404, "msg": "没有测试报告", "data": None})
     query = Reports.query.filter_by(report_path=filename).order_by(
@@ -245,10 +366,12 @@ def _case_failure_key(item):
 
 @report.route('/get_report_failure_analysis', methods=["POST"])
 def get_report_failure_analysis():
+    _ensure_report_source_columns()
     """获取报告失败分析"""
     project_id = request.json.get("project_id")
     set_id = request.json.get("set_id")
     run_id = request.json.get("run_id")
+    report_source = _normalize_report_source(request.json.get("report_source", ""))
     recent_runs = request.json.get("recent_runs", 10)
     limit = request.json.get("limit", 8)
     try:
@@ -266,43 +389,59 @@ def get_report_failure_analysis():
         if permission_error:
             return permission_error
 
-    report_query = Reports.query
-    if project_id:
-        report_query = report_query.filter_by(project_id=project_id)
-    elif allowed_ids is not None:
-        report_query = report_query.filter(Reports.project_id.in_(allowed_ids))
-    if set_id:
-        report_query = report_query.filter_by(set_id=set_id)
-    if run_id:
-        report_query = report_query.filter_by(run_id=run_id)
+    if report_source == "api":
+        run_ids = []
+        result_query = CaseResult.query.filter(
+            CaseResult.source_type == "api",
+            CaseResult.run_case_result.in_(["failed", "error"])
+        )
+        if run_id:
+            result_query = result_query.filter_by(run_id=run_id)
+        if project_id:
+            result_query = result_query.filter_by(project_id=project_id)
+        elif allowed_ids is not None:
+            result_query = result_query.filter(CaseResult.project_id.in_(allowed_ids))
+        rows = result_query.order_by(db.desc(CaseResult.updated_time)).limit(recent_runs * limit).all()
     else:
-        report_query = report_query.filter(Reports.run_id.isnot(None)).order_by(
-            db.desc(Reports.updated_time)
-        ).limit(recent_runs)
+        report_query = Reports.query
+        if project_id:
+            report_query = report_query.filter_by(project_id=project_id)
+        elif allowed_ids is not None:
+            report_query = report_query.filter(Reports.project_id.in_(allowed_ids))
+        if set_id:
+            report_query = report_query.filter_by(set_id=set_id)
+        if run_id:
+            report_query = report_query.filter_by(run_id=run_id)
+        else:
+            report_query = report_query.filter(Reports.run_id.isnot(None)).order_by(
+                db.desc(Reports.updated_time)
+            ).limit(recent_runs)
 
-    reports = report_query.all()
-    run_ids = [item.run_id for item in reports if item.run_id]
-    if not run_ids:
-        return jsonify({'code': 200, 'msg': '请求成功', 'data': {
-            'recent_runs': recent_runs,
-            'run_ids': [],
-            'failure_top': [],
-            'repeat_failures': [],
-            'reason_groups': [],
-        }})
+        reports = report_query.all()
+        run_ids = [item.run_id for item in reports if item.run_id]
+        if not run_ids:
+            return jsonify({'code': 200, 'msg': '请求成功', 'data': {
+                'recent_runs': recent_runs,
+                'run_ids': [],
+                'failure_top': [],
+                'repeat_failures': [],
+                'reason_groups': [],
+            }})
 
-    result_query = CaseResult.query.filter(
-        CaseResult.run_id.in_(run_ids),
-        CaseResult.run_case_result.in_(["failed", "error"])
-    )
-    if project_id:
-        result_query = result_query.filter_by(project_id=project_id)
-    elif allowed_ids is not None:
-        result_query = result_query.filter(CaseResult.project_id.in_(allowed_ids))
-    if set_id:
-        result_query = result_query.filter_by(set_id=set_id)
+        result_query = CaseResult.query.filter(
+            CaseResult.run_id.in_(run_ids),
+            CaseResult.run_case_result.in_(["failed", "error"])
+        )
+        if project_id:
+            result_query = result_query.filter_by(project_id=project_id)
+        elif allowed_ids is not None:
+            result_query = result_query.filter(CaseResult.project_id.in_(allowed_ids))
+        if set_id:
+            result_query = result_query.filter_by(set_id=set_id)
 
-    rows = result_query.order_by(db.desc(CaseResult.updated_time)).all()
+        rows = result_query.order_by(db.desc(CaseResult.updated_time)).all()
+    if report_source == "api":
+        run_ids = sorted({item.run_id for item in rows if item.run_id}, reverse=True)
     case_map = {}
     reason_map = {}
     for item in rows:

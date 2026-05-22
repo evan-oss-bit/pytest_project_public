@@ -5,9 +5,9 @@
   "author": "csf",
   "license": "MIT",
   "scripts": {
-    "dev": "node build/dev-server.js",
-    "start": "node build/dev-server.js",
-    "build": "node build/build.js"
+    "dev": "scripts\\node14-run.cmd build\\dev-server.js",
+    "start": "scripts\\node14-run.cmd build\\dev-server.js",
+    "build": "scripts\\node14-run.cmd build\\build.js"
   },
   "dependencies": {
     "axios": "^0.15.3",

@@ -46,6 +46,12 @@
                             <i slot="prefix" class="el-input__icon el-icon-search"></i>
                         </el-input>
                     </el-form-item>
+                    <el-form-item>
+                        <el-select v-model="filters.report_source" clearable placeholder="报告来源" @change="getConfigList">
+                            <el-option label="pytest" value="pytest"></el-option>
+                            <el-option label="接口测试" value="api"></el-option>
+                        </el-select>
+                    </el-form-item>
 
 
 
@@ -219,8 +225,8 @@
                     <el-tag :type="reportStatusType(selectedReport)">{{ reportStatusText(selectedReport) }}</el-tag>
                 </div>
                 <div class="report-detail-actions">
-                    <el-button type="primary" icon="el-icon-view" size="mini" @click="get_html(0, selectedReport)">预览报告</el-button>
-                    <el-button type="primary" icon="el-icon-download" size="mini" @click="download(0, selectedReport)">下载</el-button>
+                    <el-button v-if="selectedReport.report_path" type="primary" icon="el-icon-view" size="mini" @click="get_html(0, selectedReport)">预览报告</el-button>
+                    <el-button v-if="selectedReport.report_path" type="primary" icon="el-icon-download" size="mini" @click="download(0, selectedReport)">下载</el-button>
                     <el-button type="primary" icon="el-icon-message" size="mini" @click="send_email(0, selectedReport)">发送邮件</el-button>
                     <el-button icon="el-icon-edit" size="mini" @click="report_remark(0, selectedReport)">备注</el-button>
                 </div>
@@ -438,6 +444,7 @@ export default {
             filters: {
                 cfg_name: "",
                 run_id: null,
+                report_source: "",
             },
             install_type_lst: [],
             addViperHost: "",
@@ -502,6 +509,7 @@ export default {
                 // { prop: "id", label: "报告id", width: 100 },
                 // { prop: "config_id", label: "配置id", width: 100 },
                 { prop: "project_name", label: "脚本项目", width: 120 },
+                { prop: "report_source_name", label: "报告来源", width: 100 },
                 //{ prop: "set_id", label: "测试集id", width: 80 },
                 // { prop: "set_title", label: "测试集名称", width: 120 },
                 // { prop: "cfg_name", label: "配置名称", width: 120 },
@@ -514,6 +522,28 @@ export default {
         };
     },
     methods: {
+        normalizeReportSource(value) {
+            const text = String(value || "").trim();
+            const lowerText = text.toLowerCase();
+            if (lowerText === "api" || lowerText === "interface" || text === "接口测试" || text === "接口") {
+                return "api";
+            }
+            if (lowerText === "pytest" || lowerText === "py" || text === "pytest测试") {
+                return "pytest";
+            }
+            return lowerText;
+        },
+        rowReportSource(row) {
+            return this.normalizeReportSource(row.report_source || row.report_source_name) || "pytest";
+        },
+        emptyFailureAnalysisData() {
+            return {
+                recent_runs: 10,
+                failure_top: [],
+                repeat_failures: [],
+                reason_groups: [],
+            };
+        },
         openReportDrawer(row) {
             this.selectedReport = row;
             this.reportDrawerVisible = true;
@@ -548,11 +578,17 @@ export default {
             return "通过";
         },
         async getFailureAnalysis() {
+            const reportSource = this.normalizeReportSource(this.filters.report_source);
+            if (reportSource === "api" && !this.aioLst.some((item) => this.rowReportSource(item) === "api")) {
+                this.failureAnalysis = this.emptyFailureAnalysisData();
+                return;
+            }
             let para = {
                 recent_runs: 10,
                 limit: 6,
                 set_id: this.addForm.value && this.addForm.value[0],
-                project_id: this.addForm.value3 && this.addForm.value3[0]
+                project_id: this.addForm.value3 && this.addForm.value3[0],
+                report_source: reportSource
             };
             await get_report_failure_analysis(para).then((res) => {
                 if (res.data.code === 200 && res.data.data) {
@@ -615,18 +651,24 @@ export default {
         //获取配置列表
         async getConfigList() {
             this.ongoing = false;
+            const reportSource = this.normalizeReportSource(this.filters.report_source);
             let para = {
                 title: this.filters.cfg_name,
                 page: this.page,
                 page_size: this.page_size-900,
                 set_id: this.addForm.value[0],
-                project_id:this.addForm.value3[0]
+                project_id:this.addForm.value3[0],
+                report_source: reportSource
             };
             this.listLoading = true;
             await get_report_info(para).then((res) => {
-                this.aioLst = res.data.data;
+                let rows = res.data.data || [];
+                if (reportSource) {
+                    rows = rows.filter((item) => this.rowReportSource(item) === reportSource);
+                }
+                this.aioLst = rows;
                 this.listLoading = false;
-                this.total = res.data.data.length
+                this.total = rows.length
             });
             this.getFailureAnalysis();
         },
@@ -1015,6 +1057,10 @@ export default {
 
         },
         download(index, row) {
+            if (!row.report_path) {
+                this.$message("没有可下载的报告文件。");
+                return false;
+            }
             this.htmlcontent = null
             let params = { filename: row.report_path }
             axios({
@@ -1058,6 +1104,10 @@ export default {
 
         },
         get_html(index, row) {
+            if (!row.report_path) {
+                this.openReportDrawer(row);
+                return false;
+            }
             this.htmlcontent = null
             let params = { filename: row.report_path }
             axios({

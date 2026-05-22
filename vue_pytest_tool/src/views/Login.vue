@@ -7,12 +7,6 @@
     <el-form-item prop="checkPass">
       <el-input type="password" v-model="ruleForm2.checkPass" auto-complete="off" placeholder="密码"></el-input>
     </el-form-item>
-    <el-form-item prop="captchaCode">
-      <div class="captcha-row">
-        <el-input v-model="ruleForm2.captchaCode" auto-complete="off" placeholder="验证码" @keyup.enter.native="handleSubmit2"></el-input>
-        <img v-if="captchaImage" class="captcha-img" :src="captchaImage" title="点击刷新验证码" @click="loadCaptcha" />
-      </div>
-    </el-form-item>
     <el-checkbox v-model="checked" checked class="remember">记住密码</el-checkbox>
     <el-form-item style="width:100%;">
       <el-button type="primary" style="width:100%;" @click.native.prevent="handleSubmit2" :loading="logining">登录</el-button>
@@ -21,27 +15,21 @@
 </template>
 
 <script>
-  import { requestLogin, get_captcha } from '../api/api';
+  import { requestLogin } from '../api/api';
   export default {
    data() {
       return {
         logining: false,
         ruleForm2: {
           account: '',
-          checkPass: '',
-          captchaCode: ''
+          checkPass: ''
         },
-        captchaId: '',
-        captchaImage: '',
         rules2: {
           account: [
             { required: true, message: '请输入账号', trigger: 'blur' },
           ],
           checkPass: [
             { required: true, message: '请输入密码', trigger: 'blur' },
-          ],
-          captchaCode: [
-            { required: true, message: '请输入验证码', trigger: 'blur' },
           ]
         },
         checked: true
@@ -53,18 +41,8 @@
         sessionStorage.setItem('token', token);
         this.$router.push({ path: '/dashboard' });
       }
-      this.loadCaptcha();
     },
     methods: {
-      loadCaptcha() {
-        get_captcha().then((res) => {
-          if (res.data.code === 200 && res.data.data) {
-            this.captchaId = res.data.data.captcha_id;
-            this.captchaImage = res.data.data.image;
-            this.ruleForm2.captchaCode = '';
-          }
-        });
-      },
       handleSubmit2(ev) {
         var _this = this;
         this.$refs.ruleForm2.validate((valid) => {
@@ -72,9 +50,7 @@
             this.logining = true;
             var loginParams = {
               username: this.ruleForm2.account,
-              password: this.ruleForm2.checkPass,
-              captcha_id: this.captchaId,
-              captcha_code: this.ruleForm2.captchaCode
+              password: this.ruleForm2.checkPass
             };
             requestLogin(loginParams).then(data => {
               this.logining = false;
@@ -84,7 +60,6 @@
                   message: msg,
                   type: 'error'
                 });
-                this.loadCaptcha();
               } else {
                 this.$message({
                   message: msg,
@@ -126,20 +101,6 @@
     }
     .remember {
       margin: 0px 0px 35px 0px;
-    }
-    .captcha-row {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    .captcha-img {
-      width: 120px;
-      height: 40px;
-      flex: 0 0 120px;
-      border: 1px solid #dcdfe6;
-      border-radius: 4px;
-      cursor: pointer;
-      object-fit: cover;
     }
   }
 </style>

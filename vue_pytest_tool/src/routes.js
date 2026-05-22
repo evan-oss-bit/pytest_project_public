@@ -123,6 +123,16 @@ let routes = [
     {
         path: '/',
         component: Home,
+        name: '接口测试',
+        leaf: true,
+        iconCls: 'fa fa-exchange',
+        children: [
+            { path: '/api_test', component: API_TEST, name: '接口测试' }
+        ]
+    },
+    {
+        path: '/',
+        component: Home,
         name: '测试报告列表',
         leaf: true,
         iconCls: 'fa fa-link',
@@ -138,16 +148,6 @@ let routes = [
         iconCls: 'fa fa-link',
         children: [
             { path: '/pytest_result', component: RESULT, name: '用例执行结果' }
-        ]
-    },
-    {
-        path: '/',
-        component: Home,
-        name: '接口测试',
-        leaf: true,
-        iconCls: 'fa fa-exchange',
-        children: [
-            { path: '/api_test', component: API_TEST, name: '接口测试' }
         ]
     },
     {

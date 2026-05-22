@@ -272,6 +272,9 @@ class CaseResult(Base, BaseMixin):
     file_path_name = db.Column(db.TEXT(65533), nullable=True)
     file_name = db.Column(db.TEXT(65533), nullable=True)
     run_case_result = db.Column(db.String(80), nullable=True)
+    source_type = db.Column(db.String(40), nullable=True, default="pytest", index=True)
+    api_result_id = db.Column(db.Integer, nullable=True, index=True)
+    api_suite_result_id = db.Column(db.Integer, nullable=True, index=True)
     mark = db.Column(db.TEXT(65533), nullable=True)
     run_id = db.Column(db.BigInteger, index=True, nullable=True, default=0)
     class_name = db.Column(db.String(1000), nullable=True)
@@ -326,6 +329,7 @@ class ApiCase(Base, BaseMixin):
 class ApiRunResult(Base, BaseMixin):
     """接口测试执行结果表"""
     __tablename__ = 'api_run_result'
+    run_id = db.Column(db.BigInteger, nullable=True, index=True, default=0)
     case_id = db.Column(db.Integer, nullable=True, index=True)
     environment_id = db.Column(db.Integer, nullable=True, index=True)
     project_id = db.Column(db.Integer, nullable=True, index=True)
@@ -339,6 +343,8 @@ class ApiRunResult(Base, BaseMixin):
     response_body = db.Column(db.TEXT(65533), nullable=True)
     elapsed_ms = db.Column(db.Integer, nullable=True)
     success = db.Column(db.Integer, nullable=True, default=0)
+    run_status = db.Column(db.String(40), nullable=True, default="finished", index=True)
+    status_text = db.Column(db.String(191), nullable=True, default="")
     assertion_result = db.Column(db.TEXT(65533), nullable=True)
     error_message = db.Column(db.TEXT(65533), nullable=True)
 
@@ -361,6 +367,7 @@ class ApiSuite(Base, BaseMixin):
 class ApiSuiteRunResult(Base, BaseMixin):
     """接口测试集合执行结果表"""
     __tablename__ = 'api_suite_run_result'
+    run_id = db.Column(db.BigInteger, nullable=True, index=True, default=0)
     suite_id = db.Column(db.Integer, nullable=True, index=True)
     project_id = db.Column(db.Integer, nullable=True, index=True)
     environment_id = db.Column(db.Integer, nullable=True, index=True)
@@ -369,6 +376,32 @@ class ApiSuiteRunResult(Base, BaseMixin):
     fail_count = db.Column(db.Integer, nullable=True, default=0)
     elapsed_ms = db.Column(db.Integer, nullable=True)
     success = db.Column(db.Integer, nullable=True, default=0)
+    run_status = db.Column(db.String(40), nullable=True, default="finished", index=True)
+    status_text = db.Column(db.String(191), nullable=True, default="")
     context = db.Column(db.TEXT(65533), nullable=True)
     step_results = db.Column(db.TEXT(65533), nullable=True)
     error_message = db.Column(db.TEXT(65533), nullable=True)
+
+
+class ApiReport(Base, BaseMixin):
+    """接口测试报告表，独立于 pytest HTML 报告"""
+    __tablename__ = 'api_report'
+    title = db.Column(db.String(255), nullable=False, index=True)
+    report_type = db.Column(db.String(40), nullable=False, default="api", index=True)
+    target_type = db.Column(db.String(40), nullable=False, index=True)  # case / suite
+    target_id = db.Column(db.Integer, nullable=True, index=True)
+    target_name = db.Column(db.String(255), nullable=True)
+    run_id = db.Column(db.BigInteger, nullable=True, index=True, default=0)
+    report_path = db.Column(db.String(1000), nullable=True)
+    run_result_id = db.Column(db.Integer, nullable=True, index=True)
+    suite_result_id = db.Column(db.Integer, nullable=True, index=True)
+    project_id = db.Column(db.Integer, nullable=True, index=True)
+    environment_id = db.Column(db.Integer, nullable=True, index=True)
+    total_count = db.Column(db.Integer, nullable=True, default=0)
+    pass_count = db.Column(db.Integer, nullable=True, default=0)
+    fail_count = db.Column(db.Integer, nullable=True, default=0)
+    success = db.Column(db.Integer, nullable=True, default=0, index=True)
+    elapsed_ms = db.Column(db.Integer, nullable=True)
+    summary = db.Column(db.TEXT(65533), nullable=True)
+    detail = db.Column(db.TEXT(65533), nullable=True)
+    is_delete = db.Column(db.Integer, nullable=True, default=0)

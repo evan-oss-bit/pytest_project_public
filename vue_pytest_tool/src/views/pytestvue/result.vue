@@ -1,152 +1,174 @@
 ﻿<template>
-    <section>
-        <!--工具条-->
-        <el-col :span="24" class="toolbar" style="padding-bottom: 0px">
-            <el-form :inline="true" :model="filters">
-                <el-col :span="20" justify="">
-                    <el-row>
-                        <el-col :span="9">
-                            <el-form-item label="" class="len_input">
-                                <div class="block" style="">
-                                    <span class="demonstration"></span>
-                                    <el-cascader :filterable="true" :clearable="true" placeholder="请选择关联测试集(也可输入测试集搜索)"
-                                        separator="=>" v-model="addForm.value" :options="addForm.options" @change="getConfigList"
-                                        :props="{ expandTrigger: 'hover' }"></el-cascader>
-                                </div>
-                            </el-form-item>
-                        </el-col>
-                        <el-col :span="9">
-                        </el-col>
-                    </el-row>
-                    <el-form-item>
-                        <el-input v-model="filters.run_id" placeholder="运行测试集或任务的id" clearable @change="getConfigList">
-                            <i slot="prefix" class="el-input__icon el-icon-search"></i>
-                        </el-input>
-                    </el-form-item>
-                    <el-select v-model="value2" clearable placeholder="请选择"  @change="getConfigList">
-                        <el-option v-for="item in options2" :key="item.value2" :label="item.label" :value="item.value2">
-                        </el-option>
+    <section class="result-page">
+        <div class="result-filter-panel">
+            <div class="result-filter-head">
+                <div>
+                    <h3>用例执行结果</h3>
+                    <span>按运行 ID、来源、结果、测试集和用例名快速定位执行明细</span>
+                </div>
+                <div class="result-filter-actions">
+                    <el-button type="primary" icon="el-icon-search" @click="getConfigList">查询</el-button>
+                    <el-button icon="el-icon-refresh" @click="resetFilters">重置</el-button>
+                    <el-button type="success" icon="el-icon-download" @click="handleExport('', '#exportTab', { raw: true })">导出当前页</el-button>
+                </div>
+            </div>
+            <el-form :inline="true" :model="filters" class="result-filter-form" size="small">
+                <el-form-item label="测试集">
+                    <el-cascader
+                        filterable
+                        clearable
+                        placeholder="请选择关联测试集"
+                        separator="=>"
+                        v-model="addForm.value"
+                        :options="addForm.options"
+                        @change="getConfigList"
+                        :props="{ expandTrigger: 'hover' }">
+                    </el-cascader>
+                </el-form-item>
+                <el-form-item label="run_id">
+                    <el-input v-model="filters.run_id" placeholder="运行测试集或任务的id" clearable @change="getConfigList">
+                        <i slot="prefix" class="el-input__icon el-icon-search"></i>
+                    </el-input>
+                </el-form-item>
+                <el-form-item label="结果">
+                    <el-select v-model="value2" clearable placeholder="全部结果" @change="getConfigList">
+                        <el-option v-for="item in options2" :key="item.value2" :label="item.label" :value="item.value2"></el-option>
                     </el-select>
-                    <el-form-item class="block">
-    <!-- <span class="demonstration">带快捷选项</span> -->
-    <el-date-picker
-      v-model="time_value1"
-      type="datetimerange"
-      :picker-options="pickerOptions"
-      range-separator="至"
-      start-placeholder="开始日期"
-      end-placeholder="结束日期"
-      value-format = "yyyy-MM-dd HH:mm:ss"
-       @change="getConfigList"> 
-    </el-date-picker>
-  </el-form-item>
-                    <el-form-item>
-                        <el-input v-model="filters.cfg_name" placeholder="用例名" clearable @change="getConfigList">
-                            <i slot="prefix" class="el-input__icon el-icon-search"></i>
-                        </el-input>
-                    </el-form-item>
-
-
-
-                    <el-form-item>
-                        <el-button type="primary" icon="el-icon-search" v-on:click="getConfigList">查询</el-button>
-                    </el-form-item>
-
-                    <el-button type="primary" @click="handleExport('', '#exportTab', { raw: true })">导出当前页面数据</el-button>
-
-                    <template>
-                        <el-table :data="count_info" style="width: 100%" :cell-style="cellStyle2">
-                            <el-table-column prop="all_count" label="全部用例数"></el-table-column>
-                            <el-table-column prop="pass_count" label="通过用例数"></el-table-column>
-                            <el-table-column prop="pass_rate" label="用例通过率（%）"></el-table-column>
-                            <el-table-column prop="fail_count" label="失败用例数"></el-table-column>
-                            <el-table-column prop="error_count" label="错误用例数"></el-table-column>
-                        </el-table>
-                    </template>
-
-                    <!-- <div>
-                        <el-form-item>
-                            <el-button @click="handleAddEvent" type="primary"
-                                style="float: right; text-align: right; margin-left: 10px">扫描新增用例</el-button>
-                        </el-form-item>
-                        <el-button @click="handleAdd()" type="primary" style="margin-left: 100px">快捷添加修改用例到测试集</el-button>
-
-                    </div> -->
-                </el-col>
+                </el-form-item>
+                <el-form-item label="来源">
+                    <el-select v-model="sourceType" clearable placeholder="全部来源" @change="getConfigList">
+                        <el-option label="pytest" value="pytest"></el-option>
+                        <el-option label="接口测试" value="api"></el-option>
+                    </el-select>
+                </el-form-item>
+                <el-form-item label="时间">
+                    <el-date-picker
+                        v-model="time_value1"
+                        type="datetimerange"
+                        :picker-options="pickerOptions"
+                        range-separator="至"
+                        start-placeholder="开始日期"
+                        end-placeholder="结束日期"
+                        value-format="yyyy-MM-dd HH:mm:ss"
+                        @change="getConfigList">
+                    </el-date-picker>
+                </el-form-item>
+                <el-form-item label="用例">
+                    <el-input v-model="filters.cfg_name" placeholder="用例名 / 接口名" clearable @change="getConfigList">
+                        <i slot="prefix" class="el-input__icon el-icon-search"></i>
+                    </el-input>
+                </el-form-item>
             </el-form>
-        </el-col>
+        </div>
 
-        <!--列表-->
-        <el-col :span="24" type="“flex”" style="white-space: pre">
-            <el-table :data="aioLst" highlight-current-row stripe height="600" v-loading="listLoading" id="exportTab"
-                @selection-change="selsChange" style="width: 100%" :cell-style="cellStyle">
-                <!-- <el-table-column type="selection" width="2">
-                </el-table-column> -->
-                <el-table-column type="selection" width="55"> </el-table-column>
-                <el-table-column v-for="item in lstForm" :key="item.prop" :prop="item.prop" :label="item.label"
-                    :width="item.width" style="white-space: pre" sortable>
+        <div class="result-summary">
+            <div class="summary-card is-total">
+                <span>全部</span>
+                <strong>{{ summaryInfo.all_count || 0 }}</strong>
+            </div>
+            <div class="summary-card is-pass">
+                <span>通过</span>
+                <strong>{{ summaryInfo.pass_count || 0 }}</strong>
+            </div>
+            <div class="summary-card is-fail">
+                <span>失败</span>
+                <strong>{{ summaryInfo.fail_count || 0 }}</strong>
+            </div>
+            <div class="summary-card is-error">
+                <span>错误</span>
+                <strong>{{ summaryInfo.error_count || 0 }}</strong>
+            </div>
+            <div class="summary-card is-rate">
+                <span>通过率</span>
+                <strong>{{ summaryInfo.pass_rate || 0 }}%</strong>
+            </div>
+        </div>
+
+        <div class="result-table-panel">
+            <el-table
+                :data="aioLst"
+                highlight-current-row
+                stripe
+                height="620"
+                v-loading="listLoading"
+                id="exportTab"
+                @selection-change="selsChange"
+                class="result-table">
+                <el-table-column type="selection" width="48"></el-table-column>
+                <el-table-column label="用例信息" min-width="320" sortable>
+                    <template slot-scope="scope">
+                        <div class="case-main-cell">
+                            <div class="case-title-line">
+                                <el-tag size="mini" :type="sourceTagType(scope.row)">{{ sourceLabel(scope.row) }}</el-tag>
+                                <strong>{{ scope.row.case_title || "-" }}</strong>
+                            </div>
+                            <div class="case-sub-line">{{ scope.row.case_name || "-" }}</div>
+                        </div>
+                    </template>
                 </el-table-column>
-                <el-table-column label="配置名称">
-                        <template slot-scope="scope">
-                        <el-tag
-                            v-for="tag in scope.row.cfg_name"
-                            :key="tag"
-                            type="primary"
-                            style="margin-right: 4px;">
-                            {{ tag }}
+                <el-table-column label="结果" width="100" sortable>
+                    <template slot-scope="scope">
+                        <el-tag size="small" :type="resultTagType(scope.row.run_case_result)">
+                            {{ resultLabel(scope.row.run_case_result) }}
                         </el-tag>
-                        </template>
-                    </el-table-column>
-                <el-table-column label="操作" width="120" fixed="right">
-                    <template slot-scope="scope">
-                        <el-row>
-                            <el-dropdown split-button type="primary" @click="get_html(scope.$index, scope.row)"
-                                trigger="click">
-                                日志
-                                <el-dropdown-menu slot="dropdown">
-                                    <el-button-group class="button-container">
-                                        <el-button type="primary" icon="el-icon-search"
-                                    @click="get_html2(scope.$index, scope.row)">用例源码</el-button>
-                                    </el-button-group>
-                                </el-dropdown-menu>
-                            </el-dropdown>
-                        </el-row>
                     </template>
-
                 </el-table-column>
-                <!-- <el-table-column label="日志" width="120"><template slot-scope="scope">{{ scope.row.file_name | stateFmt
-                }}</template></el-table-column> -->
-                <!-- <el-table-column label="操作">
+                <el-table-column label="运行信息" min-width="260" sortable>
                     <template slot-scope="scope">
-                        <el-row> -->
-                            <!-- <el-button-group>
-  
-                    <el-button
-                      type="primary"
-                      @click="set_id(scope.$index, scope.row)"
-                      >编辑</el-button
-                    > -->
-                            <!-- <el-button
-                      type="danger"
-                      @click="delete_id_new(scope.$index, scope.row)"
-                      >删除</el-button
-                    > -->
-                            <!-- </el-button-group> -->
-                        <!-- </el-row>
-
+                        <div class="run-meta-cell">
+                            <div><span>run_id</span><strong>{{ scope.row.run_id || "-" }}</strong></div>
+                            <div><span>耗时/s</span><strong>{{ scope.row.duration || 0 }}</strong></div>
+                        </div>
                     </template>
-
-                </el-table-column> -->
+                </el-table-column>
+                <el-table-column label="归属" min-width="220" sortable>
+                    <template slot-scope="scope">
+                        <div class="owner-cell">
+                            <strong>{{ scope.row.project_name || "-" }}</strong>
+                            <span>{{ scope.row.set_title || "-" }}</span>
+                        </div>
+                    </template>
+                </el-table-column>
+                <el-table-column label="配置" min-width="160">
+                    <template slot-scope="scope">
+                        <div class="tag-list">
+                            <el-tag
+                                v-for="tag in configTags(scope.row.cfg_name)"
+                                :key="tag"
+                                size="mini"
+                                type="primary">
+                                {{ tag }}
+                            </el-tag>
+                            <span v-if="!configTags(scope.row.cfg_name).length">-</span>
+                        </div>
+                    </template>
+                </el-table-column>
+                <el-table-column label="执行人 / 时间" min-width="190" sortable>
+                    <template slot-scope="scope">
+                        <div class="time-cell">
+                            <strong>{{ scope.row.run_by_name || "-" }}</strong>
+                            <span>{{ scope.row.updated_time || "-" }}</span>
+                        </div>
+                    </template>
+                </el-table-column>
+                <el-table-column label="版本" width="90" prop="version" sortable></el-table-column>
+                <el-table-column label="操作" width="150" fixed="right">
+                    <template slot-scope="scope">
+                        <el-dropdown split-button type="primary" size="mini" @click="get_html(scope.$index, scope.row)" trigger="click">
+                            日志
+                            <el-dropdown-menu slot="dropdown">
+                                <el-dropdown-item @click.native="get_html2(scope.$index, scope.row)">
+                                    {{ rowSourceType(scope.row) === "api" ? "接口详情" : "用例源码" }}
+                                </el-dropdown-item>
+                            </el-dropdown-menu>
+                        </el-dropdown>
+                    </template>
+                </el-table-column>
             </el-table>
-        </el-col>
-
-        <!--工具条-->
-        <el-col :span="24" class="toolbar" v-if="!this.ongoing">
-
-            <el-pagination layout="total, prev, pager, next" @current-change="handleCurrentChange" :page-size="page_size"
-                :total="total" style="float: right">
-            </el-pagination>
-        </el-col>
+            <div class="result-pagination" v-if="!this.ongoing">
+                <el-pagination layout="total, prev, pager, next" @current-change="handleCurrentChange" :page-size="page_size" :total="total"></el-pagination>
+            </div>
+        </div>
 
 
         <!-- <el-button @click="handleAdd()" type="primary" style="margin-left: 100px">添加</el-button> -->
@@ -265,6 +287,8 @@ import {
     get_caseresult_info,
     get_testset_info,
     get_log_info,
+    get_api_log_info,
+    get_api_case_source_info,
     case_review,
 } from "../../api/api";
 import moment from "moment";
@@ -345,6 +369,7 @@ export default {
                 label: 'error'
             }],
             value2: '',
+            sourceType: '',
             timer: "",
             options: [{
                 value: 1,
@@ -386,7 +411,7 @@ export default {
                 node_randio: 1,
                 auth: false,
                 testset_title: "",
-                value: "",
+                value: [],
                 options: [],
                 value2: "",
                 options2: [],
@@ -404,6 +429,7 @@ export default {
                 { prop: "case_title", label: "用例title(py文件::pytest测试类::pytest用例)", width: 200 },
                 { prop: "case_name", label: "用例名(func.__doc__)", width: 200 },
                 { prop: "run_case_result", label: "测试结果", width: 100 },
+                { prop: "source_type_name", label: "来源", width: 100 },
                 // { prop: "longrepr", label: "失败日志", width: 400 },
                 { prop: "project_name", label: "脚本项目", width: 100 },
                 { prop: "duration", label: "用例耗时/s", width: 100 },
@@ -422,7 +448,94 @@ export default {
             ],
         };
     },
+    computed: {
+        summaryInfo() {
+            return this.count_info && this.count_info.length ? this.count_info[0] : {
+                all_count: 0,
+                pass_count: 0,
+                fail_count: 0,
+                error_count: 0,
+                pass_rate: 0,
+            };
+        },
+    },
     methods: {
+        normalizeSourceType(value) {
+            const text = String(value || "").trim();
+            const lowerText = text.toLowerCase();
+            if (lowerText === "api" || lowerText === "interface" || text === "接口测试" || text === "接口") {
+                return "api";
+            }
+            if (lowerText === "pytest" || lowerText === "py" || text === "pytest测试") {
+                return "pytest";
+            }
+            return lowerText;
+        },
+        rowSourceType(row) {
+            return this.normalizeSourceType(row.source_type || row.source_type_name) || "pytest";
+        },
+        sourceLabel(row) {
+            return this.rowSourceType(row) === "api" ? "接口测试" : "pytest";
+        },
+        sourceTagType(row) {
+            return this.rowSourceType(row) === "api" ? "warning" : "primary";
+        },
+        resultLabel(value) {
+            if (value === "passed") {
+                return "通过";
+            }
+            if (value === "failed") {
+                return "失败";
+            }
+            if (value === "error") {
+                return "错误";
+            }
+            return value || "-";
+        },
+        resultTagType(value) {
+            if (value === "passed") {
+                return "success";
+            }
+            if (value === "failed") {
+                return "danger";
+            }
+            if (value === "error") {
+                return "warning";
+            }
+            return "info";
+        },
+        configTags(value) {
+            if (!value) {
+                return [];
+            }
+            if (Array.isArray(value)) {
+                return value.filter(Boolean);
+            }
+            return String(value).split(/[,，/]/).map((item) => item.trim()).filter(Boolean);
+        },
+        resetFilters() {
+            this.filters.run_id = null;
+            this.filters.cfg_name = "";
+            this.value2 = "";
+            this.sourceType = "";
+            this.time_value1 = "";
+            this.addForm.value = [];
+            this.page = 0;
+            this.getConfigList();
+        },
+        buildCountInfo(rows) {
+            const pass_count = rows.filter((item) => item.run_case_result === "passed").length;
+            const fail_count = rows.filter((item) => item.run_case_result === "failed").length;
+            const error_count = rows.filter((item) => item.run_case_result === "error").length;
+            const all_count = rows.length;
+            return {
+                all_count,
+                pass_count,
+                fail_count,
+                error_count,
+                pass_rate: all_count ? Number(((pass_count / all_count) * 100).toFixed(2)) : 0,
+            };
+        },
         start() {
             this.timer = setInterval(this.valChange, 10000); // 注意: 第一个参数为方法名的时候不要加括号;
         },
@@ -449,8 +562,10 @@ export default {
         },
         get_html(index, row) {
             this.htmlcontent = null
-            let params = { file_name: row.file_name }
-            get_log_info(params).then(res => {
+            const isApi = this.rowSourceType(row) === "api";
+            let params = isApi ? { id: row.id } : { file_name: row.file_name }
+            const requestLog = isApi ? get_api_log_info : get_log_info;
+            requestLog(params).then(res => {
                 this.htmlcontent = res.data
                 if (this.htmlcontent.code == 404) {
                     this.$message(this.htmlcontent.msg);
@@ -464,8 +579,10 @@ export default {
         },
         get_html2(index, row) {
             this.htmlcontent = null
-            let params = { id: row.case_id }
-            case_review(params).then(res => {
+            const isApi = this.rowSourceType(row) === "api";
+            let params = isApi ? { id: row.id } : { id: row.case_id }
+            const requestSource = isApi ? get_api_case_source_info : case_review;
+            requestSource(params).then(res => {
                 this.htmlcontent = res.data
                 if (this.htmlcontent.code == 404) {
                     this.$message(this.htmlcontent.msg);
@@ -540,7 +657,9 @@ export default {
         async getConfigList() {
             this.ongoing = false;
             let page_siz = this.page_size;
-            if(this.filters.cfg_name == false && this.value2 == false && this.filters.run_id == null && this.addForm.value == false && this.time_value1 == false){
+            const sourceType = this.normalizeSourceType(this.sourceType);
+            const selectedSetId = Array.isArray(this.addForm.value) ? this.addForm.value[0] : this.addForm.value;
+            if(this.filters.cfg_name == false && this.value2 == false && this.filters.run_id == null && !selectedSetId && this.time_value1 == false && sourceType == false){
                 page_siz = 100
             };
             let para = {
@@ -549,19 +668,26 @@ export default {
                 run_id: this.filters.run_id,
                 page: this.page,
                 page_size: page_siz,
-                set_id: this.addForm.value[0],
+                set_id: selectedSetId,
                 time_value: this.time_value1,
+                source_type: sourceType,
 
             };
             this.listLoading = true;
             await get_caseresult_info(para).then((res) => {
-                this.aioLst = res.data.data;
+                let rows = res.data.data || [];
+                if (sourceType) {
+                    rows = rows.filter((item) => this.rowSourceType(item) === sourceType);
+                }
+                this.aioLst = rows;
                 this.count_info = [];
-                if (res.data.count !== null) {
+                if (sourceType) {
+                    this.count_info = [this.buildCountInfo(rows)];
+                } else if (res.data.count !== null) {
                     this.count_info = [res.data.count];
                 }
                 this.listLoading = false;
-                this.total = res.data.data.length
+                this.total = rows.length
             });
         },
         getExportTime() {
@@ -1014,19 +1140,174 @@ export default {
 </script>
     
 <style scoped>
-/* .len_input .el-cascader {
-      width: 280px;
-    } */
-
+.result-page {
+    min-height: calc(100vh - 72px);
+    padding: 14px 16px 18px;
+    background: #f4f7fb;
+    box-sizing: border-box;
+}
+.result-filter-panel,
+.result-table-panel {
+    background: #fff;
+    border: 1px solid #dde5f0;
+    border-radius: 6px;
+    box-shadow: 0 8px 22px rgba(40, 64, 95, 0.06);
+}
+.result-filter-panel {
+    padding: 14px 16px 8px;
+    margin-bottom: 12px;
+}
+.result-filter-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 12px;
+}
+.result-filter-head h3 {
+    margin: 0 0 5px;
+    color: #172033;
+    font-size: 18px;
+}
+.result-filter-head span {
+    color: #7a8aa0;
+    font-size: 12px;
+}
+.result-filter-actions {
+    display: flex;
+    gap: 8px;
+    white-space: nowrap;
+}
+.result-filter-form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 10px;
+}
+.result-filter-form /deep/ .el-form-item {
+    margin-right: 0;
+    margin-bottom: 10px;
+}
+.result-filter-form /deep/ .el-input,
+.result-filter-form /deep/ .el-select,
+.result-filter-form /deep/ .el-cascader {
+    width: 220px;
+}
+.result-filter-form /deep/ .el-date-editor {
+    width: 360px;
+}
+.result-summary {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(120px, 1fr));
+    gap: 10px;
+    margin-bottom: 12px;
+}
+.summary-card {
+    padding: 12px 14px;
+    background: #fff;
+    border: 1px solid #dde5f0;
+    border-left: 4px solid #2f80ed;
+    border-radius: 6px;
+    box-shadow: 0 6px 16px rgba(40, 64, 95, 0.05);
+}
+.summary-card span {
+    display: block;
+    color: #718096;
+    font-size: 12px;
+    margin-bottom: 5px;
+}
+.summary-card strong {
+    color: #172033;
+    font-size: 22px;
+    line-height: 1.2;
+}
+.summary-card.is-pass {
+    border-left-color: #22c55e;
+}
+.summary-card.is-fail {
+    border-left-color: #ef4444;
+}
+.summary-card.is-error {
+    border-left-color: #f59e0b;
+}
+.summary-card.is-rate {
+    border-left-color: #6366f1;
+}
+.result-table-panel {
+    padding: 10px;
+}
+.result-table /deep/ th {
+    background: #eef3f9;
+    color: #172033;
+    font-weight: 700;
+}
+.result-table /deep/ .cell {
+    white-space: normal;
+}
+.case-main-cell,
+.owner-cell,
+.time-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    line-height: 1.35;
+}
+.case-title-line {
+    display: flex;
+    align-items: flex-start;
+    gap: 7px;
+}
+.case-title-line strong {
+    color: #1f4f99;
+    word-break: break-all;
+}
+.case-sub-line,
+.owner-cell span,
+.time-cell span {
+    color: #718096;
+    font-size: 12px;
+    word-break: break-all;
+}
+.run-meta-cell {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 4px;
+}
+.run-meta-cell div {
+    display: flex;
+    gap: 8px;
+    min-width: 0;
+}
+.run-meta-cell span {
+    flex: 0 0 52px;
+    color: #718096;
+    font-size: 12px;
+}
+.run-meta-cell strong {
+    min-width: 0;
+    color: #24364b;
+    word-break: break-all;
+}
+.tag-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+.result-pagination {
+    display: flex;
+    justify-content: flex-end;
+    padding: 12px 2px 2px;
+}
 .packInput .el-input {
     width: 680px;
 }
 
-/* .el-cascader {
-      width: 280px;
-    } */
-.el-table div.cell {
-    white-space: pre-line;
+@media (max-width: 1400px) {
+    .result-summary {
+        grid-template-columns: repeat(3, minmax(120px, 1fr));
+    }
+    .result-filter-form /deep/ .el-date-editor {
+        width: 300px;
+    }
 }
 
 </style>
