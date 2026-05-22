@@ -187,6 +187,36 @@ def _pretty_json(value):
     return json.dumps(value, ensure_ascii=False, indent=2, default=str)
 
 
+def _api_dependency_payload(pre_case_ids):
+    if not pre_case_ids:
+        return []
+    normalized_ids = []
+    for item in pre_case_ids:
+        if isinstance(item, dict):
+            item = item.get("id")
+        try:
+            case_id = int(item)
+        except (TypeError, ValueError):
+            continue
+        if case_id not in normalized_ids:
+            normalized_ids.append(case_id)
+    if not normalized_ids:
+        return []
+
+    cases = ApiCase.query.filter(ApiCase.id.in_(normalized_ids), ApiCase.is_delete == 0).all()
+    case_map = {case.id: case for case in cases}
+    dependencies = []
+    for case_id in normalized_ids:
+        case = case_map.get(case_id)
+        dependencies.append({
+            "id": case_id,
+            "name": case.name if case else "",
+            "method": case.method if case else "",
+            "url": case.url if case else "",
+        })
+    return dependencies
+
+
 def _api_detail_from_result(result):
     detail = _loads_json(result.longrepr, {})
     api_run = ApiRunResult.query.filter_by(id=result.api_result_id).first() if result.api_result_id else None
@@ -426,6 +456,7 @@ def _render_api_case_preview(result):
     body = (api_case.body if api_case else None) or detail.get("request_body") or ""
     assertions = _loads_json(api_case.assertions, []) if api_case else detail.get("assertion_result") or []
     pre_case_ids = _loads_json(api_case.pre_case_ids, []) if api_case else []
+    dependencies = _api_dependency_payload(pre_case_ids)
     extractors = _loads_json(api_case.extractors, []) if api_case else detail.get("extractor_result") or []
     runtime = {
         "result_id": result.id,
@@ -441,7 +472,7 @@ def _render_api_case_preview(result):
         ("Params", _pretty_json(params)),
         ("Body ({})".format(body_type or "raw"), _pretty_json(body)),
         ("断言", _pretty_json(assertions)),
-        ("依赖接口ID", _pretty_json(pre_case_ids)),
+        ("依赖接口", _pretty_json(dependencies)),
         ("变量提取", _pretty_json(extractors)),
         ("最近执行", _pretty_json(runtime)),
     ]

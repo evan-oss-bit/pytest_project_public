@@ -389,6 +389,13 @@
                     <div class="suite-case-panel-head">
                       <strong>可选接口用例</strong>
                       <span>{{ suiteAvailableOptions.length }}/{{ suiteTransferData.length }}</span>
+                      <el-checkbox
+                        :value="suiteAvailableAllChecked"
+                        :indeterminate="suiteAvailableIndeterminate"
+                        :disabled="!suiteAvailableOptions.length"
+                        @change="toggleSuiteAvailableAll">
+                        全选
+                      </el-checkbox>
                     </div>
                     <el-input v-model="suiteCaseKeyword" size="small" clearable prefix-icon="el-icon-search" placeholder="搜索接口名称、方法或URL"></el-input>
                     <el-checkbox-group v-model="suitePickAvailableIds" class="suite-case-list">
@@ -421,6 +428,13 @@
                     <div class="suite-case-panel-head">
                       <strong>已选接口顺序</strong>
                       <span>{{ suiteSelectedOptions.length }}/{{ (suiteForm.case_ids || []).length }}</span>
+                      <el-checkbox
+                        :value="suiteSelectedAllChecked"
+                        :indeterminate="suiteSelectedIndeterminate"
+                        :disabled="!suiteSelectedOptions.length"
+                        @change="toggleSuiteSelectedAll">
+                        全选
+                      </el-checkbox>
                     </div>
                     <el-input v-model="suiteSelectedKeyword" size="small" clearable prefix-icon="el-icon-search" placeholder="搜索已选接口"></el-input>
                     <el-checkbox-group v-model="suitePickSelectedIds" class="suite-case-list">
@@ -864,6 +878,24 @@ export default {
           return String(item.fullLabel || item.label || "").toLowerCase().indexOf(keyword) !== -1;
         });
     },
+    suiteAvailableAllChecked() {
+      const ids = this.suiteAvailableOptions.map((item) => item.key);
+      return ids.length > 0 && ids.every((id) => this.suitePickAvailableIds.indexOf(id) !== -1);
+    },
+    suiteAvailableIndeterminate() {
+      const ids = this.suiteAvailableOptions.map((item) => item.key);
+      const checkedCount = ids.filter((id) => this.suitePickAvailableIds.indexOf(id) !== -1).length;
+      return checkedCount > 0 && checkedCount < ids.length;
+    },
+    suiteSelectedAllChecked() {
+      const ids = this.suiteSelectedOptions.map((item) => item.key);
+      return ids.length > 0 && ids.every((id) => this.suitePickSelectedIds.indexOf(id) !== -1);
+    },
+    suiteSelectedIndeterminate() {
+      const ids = this.suiteSelectedOptions.map((item) => item.key);
+      const checkedCount = ids.filter((id) => this.suitePickSelectedIds.indexOf(id) !== -1).length;
+      return checkedCount > 0 && checkedCount < ids.length;
+    },
     suiteStepRows() {
       return this.suiteResult && Array.isArray(this.suiteResult.step_results) ? this.suiteResult.step_results : [];
     },
@@ -1054,6 +1086,24 @@ export default {
       const result = option.last_success ? "通过" : "失败";
       const elapsed = option.last_elapsed_ms !== null && option.last_elapsed_ms !== undefined ? ` ${option.last_elapsed_ms}ms` : "";
       return `${status} ${result}${elapsed}`;
+    },
+    toggleSuiteAvailableAll(checked) {
+      const ids = this.suiteAvailableOptions.map((item) => item.key);
+      if (checked) {
+        this.suitePickAvailableIds = Array.from(new Set((this.suitePickAvailableIds || []).concat(ids)));
+        return;
+      }
+      const visibleSet = new Set(ids);
+      this.suitePickAvailableIds = (this.suitePickAvailableIds || []).filter((id) => !visibleSet.has(id));
+    },
+    toggleSuiteSelectedAll(checked) {
+      const ids = this.suiteSelectedOptions.map((item) => item.key);
+      if (checked) {
+        this.suitePickSelectedIds = Array.from(new Set((this.suitePickSelectedIds || []).concat(ids)));
+        return;
+      }
+      const visibleSet = new Set(ids);
+      this.suitePickSelectedIds = (this.suitePickSelectedIds || []).filter((id) => !visibleSet.has(id));
     },
     addSuiteCases() {
       const exists = new Set(this.suiteForm.case_ids || []);
@@ -1961,6 +2011,9 @@ export default {
 .suite-case-panel-head span {
   color: #7a8aa0;
   font-size: 12px;
+}
+.suite-case-panel-head .el-checkbox {
+  margin-left: auto;
 }
 .suite-case-panel .el-input {
   display: block;
