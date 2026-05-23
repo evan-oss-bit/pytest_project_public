@@ -12,6 +12,7 @@ from app.tools.api_payload_tools import case_name, case_payload, copy_result_fie
 from app.tools.api_report_tools import write_api_report_file
 from app.tools.api_schema_tools import ensure_api_case_columns, ensure_api_runtime_columns
 from app.tools.api_variable_tools import apply_variables, cookie_snapshot, public_context, session_for_context
+from app.tools.db_write_guard import guarded_commit, guarded_flush, guarded_rollback
 
 
 def is_auth_failure(result):
@@ -30,11 +31,19 @@ def is_auth_failure(result):
 
 
 
-def variables_for(environment_id):
+def variables_for(environment_id, context=None):
     if not environment_id:
         return {}
+    if context is not None:
+        cache = context.setdefault("_environment_variables_cache", {})
+        cache_key = str(environment_id)
+        if cache_key in cache:
+            return cache[cache_key]
     env = ApiEnvironment.query.filter_by(id=environment_id, is_delete=0).first()
-    return loads(env.variables, {}) if env else {}
+    variables = loads(env.variables, {}) if env else {}
+    if context is not None:
+        cache[cache_key] = variables
+    return variables
 
 
 CASE_SOURCE_FIELDS = [
@@ -143,11 +152,12 @@ def assertion_failure_message(assertion_result):
 
 
 def execute_case_source(source, case=None, environment_id=None, context=None, timeout=30, run_id=None):
-    context = context or {}
+    if context is None:
+        context = {}
     session = session_for_context(context)
     project_id = int_or_none(source.get("project_id"))
     variables = {}
-    variables.update(variables_for(environment_id or source.get("environment_id")))
+    variables.update(variables_for(environment_id or source.get("environment_id"), context))
     variables.update(public_context(context))
     method = (source.get("method") or "GET").upper()
     url = apply_variables(source.get("url") or "", variables)
@@ -245,8 +255,9 @@ def run_case_chain(case, source, environment_id, timeout, run_id, base_context=N
         result, extracted = execute_case_source(source, case=None, environment_id=environment_id, context=context, timeout=timeout, run_id=run_id)
         result.run_status = "finished"
         result.status_text = "执行完成"
-        db.session.flush()
+        guarded_flush()
         create_api_case_execution_result(result)
+        guarded_commit()
         payload = result_payload(result)
         payload["extracted_variables"] = extracted
         payload["context"] = public_context(context)
@@ -270,8 +281,9 @@ def run_case_chain(case, source, environment_id, timeout, run_id, base_context=N
         )
         result.run_status = "finished"
         result.status_text = "执行完成"
-        db.session.flush()
+        guarded_flush()
         create_api_case_execution_result(result)
+        guarded_commit()
         context.update(extracted)
         payload = result_payload(result)
         payload["case_name"] = chain_case.name
@@ -310,7 +322,7 @@ def run_case_data_driven(case, source, environment_id, timeout, run_id, data_row
             pass_count += 1
         else:
             fail_count += 1
-        db.session.commit()
+        guarded_commit()
     aggregate = {
         "id": final_result.id if final_result else None,
         "run_id": run_id_text(run_id),
@@ -330,7 +342,7 @@ def run_case_data_driven(case, source, environment_id, timeout, run_id, data_row
     }
     if final_result:
         create_api_case_report(final_result, aggregate, title_prefix="接口数据驱动")
-    db.session.commit()
+    guarded_commit()
     return aggregate
 
 
@@ -351,10 +363,10 @@ def run_case_payload(data):
         result, _ = execute_case_source(source, case=None, environment_id=environment_id, context={}, timeout=timeout, run_id=run_id)
         result.run_status = "finished"
         result.status_text = "执行完成"
-        db.session.flush()
+        guarded_flush()
         create_api_case_execution_result(result)
         create_api_case_report(result, result_payload(result), title_prefix="接口临时请求")
-        db.session.commit()
+        guarded_commit()
         return result_payload(result)
 
     chain = resolve_dependency_order_for_source(case, source)
@@ -373,8 +385,9 @@ def run_case_payload(data):
         )
         result.run_status = "finished"
         result.status_text = "执行完成"
-        db.session.flush()
+        guarded_flush()
         create_api_case_execution_result(result)
+        guarded_commit()
         context.update(extracted)
         payload = result_payload(result)
         payload["case_name"] = chain_case.name
@@ -384,15 +397,15 @@ def run_case_payload(data):
         if not result.success:
             if chain_case.id != case.id:
                 result.error_message = "{}\n依赖接口执行失败，依赖链执行中断".format(result.error_message or "").strip()
-            db.session.commit()
+            guarded_commit()
             break
-        db.session.commit()
+        guarded_commit()
     final_payload = result_payload(final_result)
     final_payload["chain_results"] = chain_results
     final_payload["context"] = context
     final_payload["dependency_order"] = [{"id": item.id, "name": item.name} for item in chain]
     create_api_case_report(final_result, final_payload)
-    db.session.commit()
+    guarded_commit()
     return final_payload
 
 
@@ -546,6 +559,52 @@ def create_api_suite_report(suite_result, suite=None):
     return report
 
 
+def suite_stop_requested(suite_result, force=False):
+    now = time.time()
+    last_checked = getattr(suite_result, "_last_stop_check_at", 0) or 0
+    if force or now - last_checked >= 0.5:
+        db.session.refresh(suite_result)
+        setattr(suite_result, "_last_stop_check_at", now)
+    return suite_result.run_status == "stopped"
+
+
+def finish_stopped_suite(suite_result, suite, step_results, cases, context, started, account_info, index=0):
+    steps = list(step_results or [])
+    if not steps:
+        steps = loads(suite_result.step_results, [])
+    pending_start = max((index or 0) + 1, len(steps) + 1)
+    if cases and pending_start <= len(cases):
+        steps.extend(suite_pending_steps(cases[pending_start - 1:], pending_start))
+    for step in steps:
+        if step.get("run_status") == "running":
+            step["run_status"] = "stopped"
+            step["status_text"] = "已终止"
+            step["success"] = 0
+            step["error_message"] = "用户手动终止"
+    pass_count = len([item for item in steps if item.get("success") is True or item.get("success") == 1])
+    fail_count = len([item for item in steps if item.get("success") is False or item.get("success") == 0])
+    suite_result.total_count = len(steps)
+    suite_result.pass_count = pass_count
+    suite_result.fail_count = fail_count
+    suite_result.elapsed_ms = int((time.time() - started) * 1000)
+    suite_result.success = 0
+    suite_result.run_status = "stopped"
+    suite_result.status_text = "已终止"
+    suite_result.error_message = suite_result.error_message or "用户手动终止"
+    suite_result.context = json_text(public_context(context or {}))
+    suite_result.step_results = json_text(steps)
+    apply_account_info(suite_result, account_info)
+    existing_report = ApiReport.query.filter_by(
+        report_type="api",
+        target_type="suite",
+        suite_result_id=suite_result.id,
+        is_delete=0,
+    ).first()
+    if not existing_report:
+        create_api_suite_report(suite_result, suite)
+    guarded_commit()
+
+
 def run_case_background(app, result_id, data, account_info):
     with app.app_context():
         ensure_api_case_columns()
@@ -557,7 +616,7 @@ def run_case_background(app, result_id, data, account_info):
         try:
             result.run_status = "running"
             result.status_text = "执行中"
-            db.session.commit()
+            guarded_commit()
             payload = run_case_payload(data)
             result = ApiRunResult.query.get(result_id)
             copy_result_fields(result, payload)
@@ -572,9 +631,9 @@ def run_case_background(app, result_id, data, account_info):
                 "context": payload.get("context") or {},
             })
             apply_account_info(result, account_info)
-            db.session.commit()
+            guarded_commit()
         except Exception as exc:
-            db.session.rollback()
+            guarded_rollback()
             result = ApiRunResult.query.get(result_id)
             if result:
                 result.run_status = "failed"
@@ -583,7 +642,7 @@ def run_case_background(app, result_id, data, account_info):
                 result.elapsed_ms = int((time.time() - started) * 1000)
                 result.error_message = str(exc)
                 apply_account_info(result, account_info)
-                db.session.commit()
+                guarded_commit()
 
 
 def run_suite_background(app, suite_result_id, suite_id, environment_id, timeout, account_info, run_id=None):
@@ -598,9 +657,12 @@ def run_suite_background(app, suite_result_id, suite_id, environment_id, timeout
             suite_run_id = suite_result.run_id
             if not suite_run_id:
                 raise ValueError("api suite run_id is required")
+            if suite_stop_requested(suite_result, force=True):
+                finish_stopped_suite(suite_result, suite, [], [], {}, started, account_info)
+                return
             suite_result.run_status = "running"
             suite_result.status_text = "执行中"
-            db.session.commit()
+            guarded_commit()
             case_ids = normalize_case_ids(loads(suite.case_ids, []))
             cases = load_ordered_cases(case_ids)
             context = {}
@@ -610,6 +672,9 @@ def run_suite_background(app, suite_result_id, suite_id, environment_id, timeout
             executed_success_case_ids = set()
             dependency_strategy = normalize_dependency_strategy(suite.dependency_strategy)
             for index, case in enumerate(cases):
+                if suite_stop_requested(suite_result):
+                    finish_stopped_suite(suite_result, suite, step_results, cases, context, started, account_info, index)
+                    return
                 try:
                     chain = resolve_dependency_order(case)
                 except ValueError as exc:
@@ -626,7 +691,7 @@ def run_suite_background(app, suite_result_id, suite_id, environment_id, timeout
                     suite_result.fail_count = fail_count
                     suite_result.total_count = len(step_results)
                     suite_result.step_results = json_text(step_results + suite_pending_steps(cases[index + 1:], index + 2))
-                    db.session.commit()
+                    guarded_commit()
                     if suite.stop_on_fail:
                         break
                     continue
@@ -634,6 +699,9 @@ def run_suite_background(app, suite_result_id, suite_id, environment_id, timeout
                     is_suite_item = chain_case.id == case.id
                     if dependency_strategy != "always" and not is_suite_item and chain_case.id in executed_success_case_ids:
                         continue
+                    if suite_stop_requested(suite_result):
+                        finish_stopped_suite(suite_result, suite, step_results, cases, context, started, account_info, index)
+                        return
                     running_step = {
                         "case_id": chain_case.id,
                         "case_name": chain_case.name,
@@ -647,9 +715,16 @@ def run_suite_background(app, suite_result_id, suite_id, environment_id, timeout
                     }
                     suite_result.total_count = len(step_results) + 1
                     suite_result.step_results = json_text(step_results + [running_step] + suite_pending_steps(cases[index + 1:], index + 2))
-                    db.session.commit()
+                    guarded_commit()
                     source = case_payload(chain_case)
                     result, extracted = execute_case_source(source, case=chain_case, environment_id=environment_id, context=context, timeout=timeout, run_id=suite_run_id)
+                    if suite_stop_requested(suite_result):
+                        try:
+                            db.session.expunge(result)
+                        except Exception:
+                            pass
+                        finish_stopped_suite(suite_result, suite, step_results, cases, context, started, account_info, index)
+                        return
                     if is_suite_item and dependency_strategy == "retry_on_auth_fail" and is_auth_failure(result):
                         db.session.expunge(result)
                         for refresh_case in chain[:-1]:
@@ -665,8 +740,9 @@ def run_suite_background(app, suite_result_id, suite_id, environment_id, timeout
                             refresh_result.run_status = "finished"
                             refresh_result.status_text = "执行完成"
                             apply_account_info(refresh_result, account_info)
-                            db.session.flush()
+                            guarded_flush()
                             create_api_case_execution_result(refresh_result, suite_result_id=suite_result_id)
+                            guarded_commit()
                             context.update(refresh_extracted)
                             refresh_payload = result_payload(refresh_result)
                             refresh_payload["case_name"] = refresh_case.name
@@ -693,7 +769,7 @@ def run_suite_background(app, suite_result_id, suite_id, environment_id, timeout
                     result.run_status = "finished"
                     result.status_text = "执行完成"
                     apply_account_info(result, account_info)
-                    db.session.flush()
+                    guarded_flush()
                     create_api_case_execution_result(result, suite_result_id=suite_result_id)
                     context.update(extracted)
                     payload = result_payload(result)
@@ -718,7 +794,7 @@ def run_suite_background(app, suite_result_id, suite_id, environment_id, timeout
                     suite_result.context = json_text(public_context(context))
                     suite_result.step_results = json_text(step_results + suite_pending_steps(cases[index + 1:], index + 2))
                     suite_result.elapsed_ms = int((time.time() - started) * 1000)
-                    db.session.commit()
+                    guarded_commit()
                     if not result.success and suite.stop_on_fail:
                         break
                 if suite.stop_on_fail and step_results and not step_results[-1].get("success"):
@@ -738,11 +814,11 @@ def run_suite_background(app, suite_result_id, suite_id, environment_id, timeout
             suite.last_run_time = datetime.datetime.now()
             apply_account_info(suite_result, account_info)
             apply_account_info(suite, account_info)
-            db.session.flush()
+            guarded_flush()
             create_api_suite_report(suite_result, suite)
-            db.session.commit()
+            guarded_commit()
         except Exception as exc:
-            db.session.rollback()
+            guarded_rollback()
             suite_result = ApiSuiteRunResult.query.get(suite_result_id)
             if suite_result:
                 suite_result.run_status = "failed"
@@ -751,9 +827,9 @@ def run_suite_background(app, suite_result_id, suite_id, environment_id, timeout
             suite_result.error_message = str(exc)
             suite_result.elapsed_ms = int((time.time() - started) * 1000)
             apply_account_info(suite_result, account_info)
-            db.session.flush()
+            guarded_flush()
             create_api_suite_report(suite_result, suite)
-            db.session.commit()
+            guarded_commit()
 
 
 def run_suite_payload(suite, environment_id, timeout, run_id):
@@ -793,8 +869,9 @@ def run_suite_payload(suite, environment_id, timeout, run_id):
                         timeout=timeout,
                         run_id=run_id,
                     )
-                    db.session.flush()
+                    guarded_flush()
                     create_api_case_execution_result(refresh_result)
+                    guarded_commit()
                     context.update(refresh_extracted)
                     refresh_payload = result_payload(refresh_result)
                     refresh_payload["case_name"] = refresh_case.name
@@ -810,14 +887,14 @@ def run_suite_payload(suite, environment_id, timeout, run_id):
                         executed_success_case_ids.add(refresh_case.id)
                     else:
                         fail_count += 1
-                        db.session.commit()
+                        guarded_commit()
                         if suite.stop_on_fail:
                             break
                 if not suite.stop_on_fail or not step_results or step_results[-1].get("success"):
                     result, extracted = execute_case_source(source, case=chain_case, environment_id=environment_id, context=context, timeout=timeout, run_id=run_id)
                 else:
                     break
-            db.session.flush()
+            guarded_flush()
             create_api_case_execution_result(result)
             context.update(extracted)
             payload = result_payload(result)
@@ -834,10 +911,10 @@ def run_suite_payload(suite, environment_id, timeout, run_id):
                 executed_success_case_ids.add(chain_case.id)
             else:
                 fail_count += 1
-                db.session.commit()
+                guarded_commit()
                 if suite.stop_on_fail:
                     break
-            db.session.commit()
+            guarded_commit()
         if suite.stop_on_fail and step_results and not step_results[-1].get("success"):
             break
     elapsed_ms = int((time.time() - started) * 1000)
@@ -859,13 +936,14 @@ def run_suite_payload(suite, environment_id, timeout, run_id):
     suite.last_elapsed_ms = elapsed_ms
     suite.last_run_time = datetime.datetime.now()
     db.session.add(suite_result)
-    db.session.flush()
+    guarded_flush()
     CaseResult.query.filter(
         CaseResult.source_type == "api",
         CaseResult.run_id == run_id,
         CaseResult.api_suite_result_id.is_(None),
     ).update({"api_suite_result_id": suite_result.id}, synchronize_session=False)
     create_api_suite_report(suite_result, suite)
-    db.session.commit()
+    guarded_commit()
     return suite_result_payload(suite_result)
+
 

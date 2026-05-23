@@ -7,6 +7,7 @@ from flask import has_request_context, request
 
 from app.lib.lib_define import db
 from app.models.test_api_models import OperationLog
+from app.tools.db_write_guard import guarded_commit, guarded_rollback
 
 
 SENSITIVE_KEYS = {"password", "old_password", "new_password", "confirm_password", "oldpass", "newpass", "confirpass", "token", "authorization", "cookie", "set-cookie", "api_key", "secret"}
@@ -105,7 +106,18 @@ def _target_name_from_data(data):
 def should_record_operation(path, method):
     if method != "POST":
         return False
-    if path.startswith(("/auth/me", "/auth/get_operation_log")):
+    if path.startswith((
+        "/auth/me",
+        "/auth/get_operation_log",
+        "/api_test/get_case_info",
+        "/api_test/get_environment_info",
+        "/api_test/get_run_history",
+        "/api_test/get_run_result",
+        "/api_test/get_suite_history",
+        "/api_test/get_suite_history_compare",
+        "/api_test/get_suite_info",
+        "/api_test/get_suite_result",
+    )):
         return False
     action, _ = _action_from_path(path)
     return bool(action)
@@ -147,7 +159,7 @@ def record_operation_log(response):
             ip=(request.headers.get("X-Forwarded-For") or request.remote_addr or "").split(",")[0].strip(),
         )
         db.session.add(log)
-        db.session.commit()
+        guarded_commit()
     except Exception:
-        db.session.rollback()
+        guarded_rollback()
     return response

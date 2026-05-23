@@ -5,7 +5,7 @@
         <div class="api-side">
           <div class="api-side-head">
             <div>
-              <strong>{{ sideMode === "case" ? "接口用例" : "接口集合" }}</strong>
+              <strong>{{ sideMode === "case" ? "接口用例" : (sideMode === "suite" ? "接口集合" : "运行环境") }}</strong>
               <span>{{ sidebarSummary }}</span>
             </div>
             <el-button size="mini" icon="el-icon-refresh" @click="reloadSideList">刷新</el-button>
@@ -21,12 +21,15 @@
               <el-option v-for="item in projects" :key="item.id" :label="item.name" :value="item.id"></el-option>
             </el-select>
             <el-button v-if="sideMode === 'case'" type="success" size="small" icon="el-icon-plus" @click="newCase">新增接口</el-button>
-            <el-button v-else type="success" size="small" icon="el-icon-plus" @click="newSuite">新增集合</el-button>
+            <el-button v-else-if="sideMode === 'suite'" type="success" size="small" icon="el-icon-plus" @click="newSuite">新增集合</el-button>
+            <el-button v-else type="success" size="small" icon="el-icon-plus" @click="newEnvironment">新增环境</el-button>
           </div>
           <div class="api-side-toolbar">
             <el-select v-model="filters.run_status" size="small" clearable placeholder="执行状态" @change="reloadSideList">
               <el-option label="成功" value="passed"></el-option>
               <el-option label="失败" value="failed"></el-option>
+              <el-option label="运行中" value="running"></el-option>
+              <el-option label="已终止" value="stopped"></el-option>
               <el-option label="未执行" value="not_run"></el-option>
             </el-select>
             <el-input v-model="filters.status_code" size="small" clearable placeholder="状态码，如 200/302" @keyup.enter.native="loadCases" @blur="loadCases" @clear="loadCases"></el-input>
@@ -58,7 +61,7 @@
                 <el-select v-model="quickSuiteEnvironmentId" size="mini" clearable placeholder="选择运行环境">
                   <el-option v-for="item in environments" :key="item.id" :label="item.name" :value="item.id"></el-option>
                 </el-select>
-                <el-button type="primary" size="mini" icon="el-icon-video-play" :loading="suiteRunning" @click="runPlatformSuite">平台全量</el-button>
+                <el-button type="primary" size="mini" icon="el-icon-video-play" :loading="isPlatformSuiteRunning()" @click="runPlatformSuite">平台全量</el-button>
               </div>
               <el-table :data="suites" stripe height="528" @row-click="selectSuite">
                 <el-table-column label="接口集合" min-width="220">
@@ -70,9 +73,28 @@
                     </div>
                   </template>
                 </el-table-column>
-                <el-table-column label="操作" width="82">
+                <el-table-column label="操作" width="108">
                   <template slot-scope="scope">
-                    <el-button type="primary" size="mini" :loading="suiteRunning" @click.stop="runSuiteRow(scope.row)">运行</el-button>
+                    <el-button v-if="isSuiteRunning(scope.row.id)" type="danger" size="mini" @click.stop="stopSuiteRow(scope.row)">终止</el-button>
+                    <el-button v-else type="primary" size="mini" @click.stop="runSuiteRow(scope.row)">运行</el-button>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </el-tab-pane>
+            <el-tab-pane label="运行环境" name="env">
+              <el-table :data="environments" stripe height="528" @row-click="chooseEnvironment">
+                <el-table-column label="环境" min-width="220">
+                  <template slot-scope="scope">
+                    <div class="case-row" :class="{ active: currentEnvironment.id === scope.row.id }">
+                      <el-tag size="mini" :type="scope.row.project_id ? 'primary' : 'success'">{{ scope.row.project_id ? '项目' : '公共' }}</el-tag>
+                      <strong>{{ scope.row.name }}</strong>
+                      <span>{{ scope.row.description || variableSummary(scope.row.variables) || "公共运行变量" }}</span>
+                    </div>
+                  </template>
+                </el-table-column>
+                <el-table-column label="操作" width="108">
+                  <template slot-scope="scope">
+                    <el-button type="primary" size="mini" @click.stop="editEnvironment(scope.row)">编辑</el-button>
                   </template>
                 </el-table-column>
               </el-table>
@@ -85,7 +107,7 @@
         <div class="api-main">
           <div class="api-main-head">
             <div>
-              <span class="api-main-kicker">{{ sideMode === "case" ? "API CASE" : "API SUITE" }}</span>
+              <span class="api-main-kicker">{{ sideMode === "case" ? "API CASE" : (sideMode === "suite" ? "API SUITE" : "API ENV") }}</span>
               <h2>{{ workspaceTitle }}</h2>
               <p>{{ workspaceSubtitle }}</p>
             </div>
@@ -93,7 +115,7 @@
               <el-tag v-if="lastResult" :type="resultTagType(lastResult)">{{ resultStatusText(lastResult) }}</el-tag>
               <span v-if="lastResult && lastResult.run_id">run_id {{ lastResult.run_id }}</span>
               <span v-if="lastResult">Status {{ lastResult.response_status || "-" }} · {{ lastResult.elapsed_ms || 0 }} ms</span>
-              <span v-else>{{ sideMode === "case" ? "未执行" : ((suiteForm.case_ids || []).length + " 个接口") }}</span>
+              <span v-else>{{ sideMode === "case" ? "未执行" : (sideMode === "suite" ? ((suiteForm.case_ids || []).length + " 个接口") : (environments.length + " 个环境")) }}</span>
             </div>
           </div>
           <div v-if="sideMode === 'case'">
@@ -266,31 +288,12 @@
                 :placeholder="dataRowsPlaceholder">
               </json-editor>
             </el-tab-pane>
-            <el-tab-pane label="环境变量" name="env">
-              <div class="env-toolbar">
-                <el-button type="primary" size="small" icon="el-icon-plus" @click="newEnvironment">新增环境</el-button>
-                <el-button size="small" icon="el-icon-edit" :disabled="!currentEnvironment.id" @click="editEnvironment">编辑环境</el-button>
-              </div>
-              <el-table :data="environments" border size="mini" height="220" @row-click="chooseEnvironment">
-                <el-table-column prop="name" label="环境名" width="180"></el-table-column>
-                <el-table-column label="变量" min-width="260">
-                  <template slot-scope="scope">
-                    <code>{{ scope.row.variables }}</code>
-                  </template>
-                </el-table-column>
-                <el-table-column label="操作" width="80">
-                  <template slot-scope="scope">
-                    <el-button type="text" size="mini" @click.stop="removeEnvironment(scope.row)">删除</el-button>
-                  </template>
-                </el-table-column>
-              </el-table>
-            </el-tab-pane>
             <el-tab-pane v-if="false" label="接口集合" name="suite">
               <div class="suite-layout">
                 <div class="suite-list">
                   <div class="suite-toolbar">
                     <el-button type="success" size="small" icon="el-icon-plus" @click="newSuite">新增集合</el-button>
-                    <el-button type="primary" size="small" icon="el-icon-video-play" :loading="suiteRunning" @click="runPlatformSuite">平台全量测试</el-button>
+                    <el-button type="primary" size="small" icon="el-icon-video-play" :loading="isPlatformSuiteRunning()" @click="runPlatformSuite">平台全量测试</el-button>
                     <el-button size="small" icon="el-icon-refresh" @click="loadSuites">刷新</el-button>
                   </div>
                   <el-table :data="suites" border size="mini" height="260" @row-click="selectSuite">
@@ -346,7 +349,8 @@
                     </el-form-item>
                     <el-form-item>
                       <el-button type="primary" icon="el-icon-check" @click="saveSuite">保存集合</el-button>
-                      <el-button type="success" icon="el-icon-video-play" :loading="suiteRunning" @click="runSuite">运行集合</el-button>
+                      <el-button type="success" icon="el-icon-video-play" :loading="isSuiteRunning(suiteForm.id)" @click="runSuite">运行集合</el-button>
+                      <el-button v-if="isSuiteRunning(suiteForm.id)" type="danger" icon="el-icon-close" @click="stopCurrentSuite">终止集合</el-button>
                       <el-button type="danger" icon="el-icon-delete" :disabled="!suiteForm.id" @click="removeSuite">删除集合</el-button>
                     </el-form-item>
                   </el-form>
@@ -356,7 +360,7 @@
           </el-tabs>
           </div>
 
-          <div v-else class="suite-editor-page" :class="{ 'suite-editor-collapsed': suiteEditorCollapsed }">
+          <div v-else-if="sideMode === 'suite'" class="suite-editor-page" :class="{ 'suite-editor-collapsed': suiteEditorCollapsed }">
             <div class="suite-page-head">
               <div>
                 <h3>{{ suiteForm.id ? "编辑接口集合" : "新建接口集合" }}</h3>
@@ -367,7 +371,8 @@
                   {{ suiteEditorCollapsed ? "展开编排" : "收起编排" }}
                 </el-button>
                 <el-button type="primary" icon="el-icon-check" @click="saveSuite">保存集合</el-button>
-                <el-button type="success" icon="el-icon-video-play" :loading="suiteRunning" @click="runSuite">运行集合</el-button>
+                <el-button type="success" icon="el-icon-video-play" :loading="isSuiteRunning(suiteForm.id)" @click="runSuite">运行集合</el-button>
+                <el-button v-if="isSuiteRunning(suiteForm.id)" type="danger" icon="el-icon-close" @click="stopCurrentSuite">终止集合</el-button>
                 <el-button type="danger" icon="el-icon-delete" :disabled="!suiteForm.id" @click="removeSuite">删除集合</el-button>
               </div>
             </div>
@@ -492,7 +497,51 @@
             </el-form>
           </div>
 
-          <div class="response-panel">
+          <div v-else class="env-page">
+            <div class="suite-page-head">
+              <div>
+                <h3>运行环境变量</h3>
+                <p>统一维护 host、token、账号、随机数据前缀等公共变量，接口用例和接口集合只选择环境使用。</p>
+              </div>
+              <div class="suite-page-actions">
+                <el-button type="success" icon="el-icon-plus" @click="newEnvironment">新增环境</el-button>
+                <el-button type="primary" icon="el-icon-edit" :disabled="!currentEnvironment.id" @click="editEnvironment(currentEnvironment)">编辑环境</el-button>
+                <el-button type="danger" icon="el-icon-delete" :disabled="!currentEnvironment.id" @click="removeEnvironment(currentEnvironment)">删除环境</el-button>
+              </div>
+            </div>
+            <div class="env-grid">
+              <div class="env-list-panel">
+                <el-table :data="environments" border stripe height="460" @row-click="chooseEnvironment">
+                  <el-table-column label="环境名称" width="180">
+                    <template slot-scope="scope">
+                      <strong>{{ scope.row.name }}</strong>
+                      <div class="muted-line">{{ scope.row.project_id ? "项目环境" : "公共环境" }}</div>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="变量摘要" min-width="260">
+                    <template slot-scope="scope">{{ variableSummary(scope.row.variables) }}</template>
+                  </el-table-column>
+                  <el-table-column prop="description" label="备注" min-width="180"></el-table-column>
+                </el-table>
+              </div>
+              <div class="env-detail-panel">
+                <div v-if="currentEnvironment.id">
+                  <div class="env-detail-head">
+                    <div>
+                      <span class="api-main-kicker">ENVIRONMENT</span>
+                      <h3>{{ currentEnvironment.name }}</h3>
+                      <p>{{ currentEnvironment.description || "未填写备注" }}</p>
+                    </div>
+                    <el-tag :type="currentEnvironment.project_id ? 'primary' : 'success'">{{ currentEnvironment.project_id ? "项目环境" : "公共环境" }}</el-tag>
+                  </div>
+                  <pre class="env-json-preview">{{ prettyJson(currentEnvironment.variables || {}) }}</pre>
+                </div>
+                <div v-else class="response-empty-state">选择左侧环境查看变量详情，或新增一个公共运行环境。</div>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="sideMode !== 'env'" class="response-panel">
             <div class="response-head">
               <div class="response-title">
                 <strong>{{ sideMode === "case" ? "接口结果" : "集合结果" }}</strong>
@@ -778,6 +827,7 @@ import {
   save_api_case,
   save_api_environment,
   save_api_suite,
+  stop_api_suite,
 } from "../../api/api";
 
 const JsonEditor = {
@@ -843,6 +893,7 @@ export default {
       suiteForm: emptySuite(),
       quickSuiteEnvironmentId: "",
       suiteRunning: false,
+      suiteRunningMap: {},
       suiteEditorCollapsed: false,
       suiteResult: null,
       suiteCaseKeyword: "",
@@ -854,6 +905,7 @@ export default {
       suiteHistoryLoading: false,
       casePollTimer: null,
       suitePollTimer: null,
+      suitePollTimers: {},
       currentEnvironment: {},
       envForm: { id: "", name: "", project_id: "", variablesText: "{\n  \n}", description: "" },
       lastResult: null,
@@ -865,11 +917,17 @@ export default {
       if (this.sideMode === "suite") {
         return `${this.suites.length} 个集合`;
       }
+      if (this.sideMode === "env") {
+        return `${this.environments.length} 个环境`;
+      }
       return `${this.cases.length} 个用例`;
     },
     workspaceTitle() {
       if (this.sideMode === "suite") {
         return this.suiteForm.name || "新建接口集合";
+      }
+      if (this.sideMode === "env") {
+        return this.currentEnvironment.name || "运行环境变量";
       }
       return this.currentCase.name || "新建接口用例";
     },
@@ -878,6 +936,9 @@ export default {
         const count = (this.suiteForm.case_ids || []).length;
         const env = this.environments.find((item) => item.id === this.suiteForm.environment_id);
         return `${count} 个接口${env ? " · " + env.name : ""}`;
+      }
+      if (this.sideMode === "env") {
+        return "公共变量独立维护，接口用例和接口集合按环境引用";
       }
       const method = this.currentCase.method || "GET";
       return this.currentCase.url ? `${method} ${this.currentCase.url}` : "填写请求地址后即可发送调试";
@@ -1053,6 +1114,44 @@ export default {
       const item = this.normalizeSuiteHistoryRow(row);
       return item && item.report_path ? item.report_path : "";
     },
+    isSuiteRunning(suiteId) {
+      return !!(suiteId && this.suiteRunningMap[String(suiteId)]);
+    },
+    setSuiteRunning(suiteId, running) {
+      if (!suiteId) {
+        return;
+      }
+      this.$set(this.suiteRunningMap, String(suiteId), !!running);
+      this.suiteRunning = Object.keys(this.suiteRunningMap).some((key) => this.suiteRunningMap[key]);
+    },
+    runningResultForSuite(suiteId) {
+      const suite = this.suites.find((item) => String(item.id) === String(suiteId));
+      return suite && suite.running_result ? this.normalizeSuiteHistoryRow(suite.running_result) : null;
+    },
+    syncSuiteRunningState(suites) {
+      const activeKeys = {};
+      (suites || []).forEach((suite) => {
+        const result = suite.running_result ? this.normalizeSuiteHistoryRow(suite.running_result) : null;
+        const isRunning = result && (result.run_status === "queued" || result.run_status === "running");
+        this.$set(this.suiteRunningMap, String(suite.id), !!isRunning);
+        if (isRunning) {
+          activeKeys[String(suite.id)] = true;
+          if (result.id && !this.suitePollTimers[String(result.id)]) {
+            this.pollSuiteResult(result.id, suite.id);
+          }
+        }
+      });
+      Object.keys(this.suiteRunningMap).forEach((key) => {
+        if (!activeKeys[key]) {
+          this.$set(this.suiteRunningMap, key, false);
+        }
+      });
+      this.suiteRunning = Object.keys(this.suiteRunningMap).some((key) => this.suiteRunningMap[key]);
+    },
+    isPlatformSuiteRunning() {
+      const suite = this.suites.find((item) => String(item.name || "").indexOf("平台") !== -1 && String(item.name || "").indexOf("全量") !== -1);
+      return suite ? this.isSuiteRunning(suite.id) : false;
+    },
     reportRequestHeaders() {
       const token = sessionStorage.getItem("token");
       if (!token) {
@@ -1169,6 +1268,21 @@ export default {
         return value || "";
       }
     },
+    variableSummary(value) {
+      let variables = value || {};
+      if (typeof value === "string") {
+        try {
+          variables = JSON.parse(value || "{}");
+        } catch (e) {
+          variables = {};
+        }
+      }
+      const keys = Object.keys(variables || {});
+      if (!keys.length) {
+        return "暂无变量";
+      }
+      return keys.slice(0, 5).map((key) => `${key}: ${String(variables[key]).slice(0, 28)}`).join("，") + (keys.length > 5 ? ` 等 ${keys.length} 项` : "");
+    },
     prettyBody(value) {
       return this.prettyJson(value);
     },
@@ -1201,6 +1315,9 @@ export default {
       if (status === "running") {
         return "warning";
       }
+      if (status === "stopped") {
+        return "info";
+      }
       if (status === "failed") {
         return "danger";
       }
@@ -1224,6 +1341,9 @@ export default {
       }
       if (row.run_status === "running") {
         return "执行中";
+      }
+      if (row.run_status === "stopped") {
+        return "已终止";
       }
       if (row.success === null || row.success === undefined) {
         return "-";
@@ -1381,11 +1501,14 @@ export default {
       await get_api_suite_info(params).then((res) => {
         if (res.data && res.data.code === 200) {
           this.suites = res.data.data || [];
+          this.syncSuiteRunningState(this.suites);
         } else {
           this.suites = [];
+          this.syncSuiteRunningState([]);
         }
       }).catch(() => {
         this.suites = [];
+        this.syncSuiteRunningState([]);
       });
     },
     async loadEnvironments() {
@@ -1408,6 +1531,8 @@ export default {
       if (this.sideMode === "suite") {
         this.loadSuites();
         this.loadCases();
+      } else if (this.sideMode === "env") {
+        this.loadEnvironments();
       } else {
         this.loadCases();
       }
@@ -1568,19 +1693,22 @@ export default {
     },
     chooseEnvironment(row) {
       this.currentEnvironment = row;
-      this.currentCase.environment_id = row.id;
     },
     newEnvironment() {
       this.envForm = { id: "", name: "", project_id: this.filters.project_id || "", variablesText: "{\n  \n}", description: "" };
       this.envDialogVisible = true;
     },
-    editEnvironment() {
+    editEnvironment(row) {
+      const target = row && row.id ? row : this.currentEnvironment;
+      if (!target || !target.id) {
+        return;
+      }
       this.envForm = {
-        id: this.currentEnvironment.id,
-        name: this.currentEnvironment.name,
-        project_id: this.currentEnvironment.project_id || "",
-        variablesText: this.prettyJson(this.currentEnvironment.variables || {}),
-        description: this.currentEnvironment.description || "",
+        id: target.id,
+        name: target.name,
+        project_id: target.project_id || "",
+        variablesText: this.prettyJson(target.variables || {}),
+        description: target.description || "",
       };
       this.envDialogVisible = true;
     },
@@ -1599,13 +1727,20 @@ export default {
       }
       this.$message.success(res.data.msg);
       this.envDialogVisible = false;
-      this.loadEnvironments();
+      await this.loadEnvironments();
+      this.currentEnvironment = res.data.data || this.currentEnvironment;
     },
     async removeEnvironment(row) {
+      if (!row || !row.id) {
+        return;
+      }
       await this.$confirm("确认删除这个环境？", "提示", { type: "warning" });
       const res = await delete_api_environment({ id: row.id });
       if (res.data && res.data.code === 200) {
         this.$message.success(res.data.msg);
+        if (this.currentEnvironment.id === row.id) {
+          this.currentEnvironment = {};
+        }
         this.loadEnvironments();
       } else {
         this.$message.warning((res.data && res.data.msg) || "删除失败");
@@ -1654,7 +1789,19 @@ export default {
       this.rememberCaseOptions(this.suiteForm.case_list);
       this.suitePickAvailableIds = [];
       this.suitePickSelectedIds = [];
-      this.suiteResult = null;
+      this.suiteResult = row.running_result ? this.normalizeSuiteHistoryRow(row.running_result) : null;
+      if (this.suiteResult) {
+        this.lastResult = {
+          success: this.suiteResult.success,
+          run_status: this.suiteResult.run_status,
+          status_text: this.suiteResult.status_text,
+          response_status: "-",
+          elapsed_ms: this.suiteResult.elapsed_ms,
+          run_id: this.suiteResult.run_id,
+          assertion_result: [],
+          extractor_result: [],
+        };
+      }
       this.responseTab = "suite_result";
       this.loadSuiteHistory();
     },
@@ -1679,51 +1826,133 @@ export default {
           return;
         }
       }
-      this.suiteRunning = true;
-      this.clearSuitePoll();
+      const suiteId = this.suiteForm.id;
+      if (this.isSuiteRunning(suiteId)) {
+        this.$message.warning("当前接口集合正在执行中");
+        return;
+      }
+      this.setSuiteRunning(suiteId, true);
       await run_api_suite({ id: this.suiteForm.id, environment_id: this.suiteForm.environment_id, async: true }).then((res) => {
         if (!res.data || res.data.code !== 200) {
           this.$message.warning((res.data && res.data.msg) || "执行失败");
-          this.suiteRunning = false;
+          this.setSuiteRunning(suiteId, false);
           return;
         }
         this.suiteResult = this.normalizeSuiteHistoryRow(res.data.data);
         this.lastResult = { success: this.suiteResult.success, run_status: this.suiteResult.run_status, status_text: this.suiteResult.status_text, response_status: "-", elapsed_ms: this.suiteResult.elapsed_ms, run_id: this.suiteResult.run_id, assertion_result: [], extractor_result: [] };
         this.responseTab = "suite_result";
-        this.pollSuiteResult(this.suiteResult.id);
+        this.pollSuiteResult(this.suiteResult.id, suiteId);
       }).catch(() => {
-        this.suiteRunning = false;
+        this.setSuiteRunning(suiteId, false);
       });
     },
-    clearSuitePoll() {
+    clearSuitePoll(resultId) {
+      if (resultId) {
+        const key = String(resultId);
+        if (this.suitePollTimers[key]) {
+          clearTimeout(this.suitePollTimers[key]);
+          this.$delete(this.suitePollTimers, key);
+        }
+        return;
+      }
+      Object.keys(this.suitePollTimers).forEach((key) => {
+        clearTimeout(this.suitePollTimers[key]);
+        this.$delete(this.suitePollTimers, key);
+      });
       if (this.suitePollTimer) {
         clearTimeout(this.suitePollTimer);
         this.suitePollTimer = null;
       }
     },
-    pollSuiteResult(resultId) {
+    pollSuiteResult(resultId, suiteId) {
       if (!resultId) {
-        this.suiteRunning = false;
+        this.setSuiteRunning(suiteId, false);
         return;
       }
       get_api_suite_result({ id: resultId }).then((res) => {
         if (res.data && res.data.code === 200) {
-          this.suiteResult = this.normalizeSuiteHistoryRow(res.data.data);
-          this.lastResult = { success: this.suiteResult.success, run_status: this.suiteResult.run_status, status_text: this.suiteResult.status_text, response_status: "-", elapsed_ms: this.suiteResult.elapsed_ms, run_id: this.suiteResult.run_id, assertion_result: [], extractor_result: [] };
-          const status = this.suiteResult.run_status;
+          const result = this.normalizeSuiteHistoryRow(res.data.data);
+          if (this.suiteForm.id === suiteId) {
+            this.suiteResult = result;
+            this.lastResult = { success: result.success, run_status: result.run_status, status_text: result.status_text, response_status: "-", elapsed_ms: result.elapsed_ms, run_id: result.run_id, assertion_result: [], extractor_result: [] };
+          }
+          const status = result.run_status;
           if (status === "queued" || status === "running") {
-            this.suitePollTimer = setTimeout(() => this.pollSuiteResult(resultId), 1000);
+            const timer = setTimeout(() => this.pollSuiteResult(resultId, suiteId), 1000);
+            this.$set(this.suitePollTimers, String(resultId), timer);
             return;
           }
-          this.suiteRunning = false;
+          this.clearSuitePoll(resultId);
+          this.setSuiteRunning(suiteId, false);
           this.loadSuites();
-          this.loadSuiteHistory();
+          if (this.suiteForm.id === suiteId) {
+            this.loadSuiteHistory();
+          }
           return;
         }
-        this.suiteRunning = false;
+        this.setSuiteRunning(suiteId, false);
       }).catch(() => {
-        this.suiteRunning = false;
+        this.setSuiteRunning(suiteId, false);
       });
+    },
+    async stopSuiteById(suiteId, resultId) {
+      if (!suiteId && !resultId) {
+        return;
+      }
+      try {
+        const res = await stop_api_suite({ suite_id: suiteId, result_id: resultId || "" });
+        if (!res.data || res.data.code !== 200) {
+          this.$message.warning((res.data && res.data.msg) || "终止失败");
+          return;
+        }
+        const result = this.normalizeSuiteHistoryRow(res.data.data || {});
+        this.$message.success(res.data.msg || "已发送终止指令");
+        this.setSuiteRunning(suiteId || result.suite_id, false);
+        if (result.id) {
+          this.clearSuitePoll(result.id);
+        }
+        if (result && this.suiteForm.id === (suiteId || result.suite_id)) {
+          this.suiteResult = result;
+          this.lastResult = {
+            success: result.success,
+            run_status: result.run_status,
+            status_text: result.status_text,
+            response_status: "-",
+            elapsed_ms: result.elapsed_ms,
+            run_id: result.run_id,
+            assertion_result: [],
+            extractor_result: [],
+          };
+          this.responseTab = "suite_result";
+          this.loadSuiteHistory();
+        }
+        this.loadSuites();
+      } catch (e) {
+        this.$message.warning("终止失败");
+      }
+    },
+    async confirmStopSuite(suiteId, resultId, suiteName) {
+      const name = suiteName || this.suiteForm.name || "当前接口集合";
+      try {
+        await this.$confirm(`确认终止「${name}」吗？当前正在请求的接口会等待返回，后续接口将停止执行。`, "终止确认", {
+          confirmButtonText: "确认终止",
+          cancelButtonText: "取消",
+          type: "warning",
+        });
+      } catch (e) {
+        return;
+      }
+      await this.stopSuiteById(suiteId, resultId);
+    },
+    stopCurrentSuite() {
+      const runningResult = (this.suiteResult && (this.suiteResult.run_status === "queued" || this.suiteResult.run_status === "running"))
+        ? this.suiteResult
+        : this.runningResultForSuite(this.suiteForm.id);
+      this.confirmStopSuite(this.suiteForm.id, runningResult && runningResult.id, this.suiteForm.name);
+    },
+    stopSuiteRow(row) {
+      const result = row && row.running_result ? this.normalizeSuiteHistoryRow(row.running_result) : this.runningResultForSuite(row && row.id);
+      this.confirmStopSuite(row && row.id, result && result.id, row && row.name);
     },
     async runSuiteRow(row) {
       this.selectSuite(row);
@@ -2219,6 +2448,52 @@ export default {
   display: flex;
   gap: 8px;
   white-space: nowrap;
+}
+.env-page {
+  min-height: 620px;
+}
+.env-grid {
+  display: grid;
+  grid-template-columns: minmax(420px, 1fr) minmax(380px, 0.9fr);
+  gap: 14px;
+}
+.env-list-panel,
+.env-detail-panel {
+  min-height: 460px;
+  padding: 12px;
+  border: 1px solid #dfe8f4;
+  border-radius: 6px;
+  background: #fbfdff;
+}
+.env-detail-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e6edf6;
+}
+.env-detail-head h3 {
+  margin: 3px 0 5px;
+  color: #16263a;
+}
+.env-detail-head p,
+.muted-line {
+  margin: 0;
+  color: #7a8aa0;
+  font-size: 12px;
+}
+.env-json-preview {
+  min-height: 350px;
+  max-height: 520px;
+  overflow: auto;
+  margin: 12px 0 0;
+  padding: 14px;
+  color: #24364b;
+  background: #f5f8fc;
+  border: 1px solid #dfe7f1;
+  border-radius: 4px;
+  font-family: Consolas, "Courier New", monospace;
+  line-height: 1.55;
 }
 .suite-collapsed-summary {
   display: flex;

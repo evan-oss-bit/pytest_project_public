@@ -19,6 +19,7 @@ from app.tools.api_execution_service import (
 )
 from app.tools.api_schema_tools import ensure_api_case_columns, ensure_api_runtime_columns
 from app.tools.api_payload_tools import api_report_payload, case_payload, environment_payload, load_ordered_cases, normalize_case_ids, result_payload, suite_history_compare_payload, suite_payload, suite_pending_steps, suite_result_payload
+from app.tools.db_write_guard import guarded_commit
 
 
 def _check_project(project_id, permission="view"):
@@ -76,7 +77,7 @@ def save_environment():
     item.variables = json_text(variables)
     item.description = data.get("description") or ""
     db.session.add(item)
-    db.session.commit()
+    guarded_commit()
     return jsonify({"code": 200, "msg": "保存成功", "data": environment_payload(item)})
 
 
@@ -90,7 +91,7 @@ def delete_environment():
     if permission_error:
         return permission_error
     item.is_delete = 1
-    db.session.commit()
+    guarded_commit()
     return jsonify({"code": 200, "msg": "删除成功", "data": None})
 
 
@@ -157,7 +158,7 @@ def save_case():
     item.data_rows = json_text(normalize_data_rows(data.get("data_rows") or []))
     item.description = data.get("description") or ""
     db.session.add(item)
-    db.session.commit()
+    guarded_commit()
     return jsonify({"code": 200, "msg": "保存成功", "data": case_payload(item)})
 
 
@@ -172,7 +173,7 @@ def delete_case():
     if permission_error:
         return permission_error
     item.is_delete = 1
-    db.session.commit()
+    guarded_commit()
     return jsonify({"code": 200, "msg": "删除成功", "data": None})
 
 
@@ -207,7 +208,7 @@ def run_case():
         )
         apply_run_user(result)
         db.session.add(result)
-        db.session.commit()
+        guarded_commit()
         app = current_app._get_current_object()
         account = current_account()
         account_info = {"id": account.id, "name": account.username} if account else None
@@ -277,6 +278,22 @@ def get_suite_info():
         query = query.filter(ApiSuite.last_success == 0)
     elif run_status == "not_run":
         query = query.filter(ApiSuite.last_success.is_(None))
+    elif run_status == "running":
+        running_suite_ids = [
+            item[0] for item in db.session.query(ApiSuiteRunResult.suite_id)
+            .filter(ApiSuiteRunResult.run_status.in_(["queued", "running"]))
+            .distinct()
+            .all()
+        ]
+        query = query.filter(ApiSuite.id.in_(running_suite_ids or [0]))
+    elif run_status == "stopped":
+        stopped_suite_ids = [
+            item[0] for item in db.session.query(ApiSuiteRunResult.suite_id)
+            .filter(ApiSuiteRunResult.run_status == "stopped")
+            .distinct()
+            .all()
+        ]
+        query = query.filter(ApiSuite.id.in_(stopped_suite_ids or [0]))
     total = query.count()
     rows = query.order_by(db.desc(ApiSuite.updated_time)).limit(page_size).offset(page_no).all()
     return jsonify({"code": 200, "msg": "请求成功", "data": [suite_payload(item) for item in rows], "total": total})
@@ -313,7 +330,7 @@ def save_suite():
     suite.dependency_strategy = normalize_dependency_strategy(data.get("dependency_strategy"))
     suite.description = data.get("description") or ""
     db.session.add(suite)
-    db.session.commit()
+    guarded_commit()
     return jsonify({"code": 200, "msg": "保存成功", "data": suite_payload(suite)})
 
 
@@ -327,7 +344,7 @@ def delete_suite():
     if permission_error:
         return permission_error
     suite.is_delete = 1
-    db.session.commit()
+    guarded_commit()
     return jsonify({"code": 200, "msg": "删除成功", "data": None})
 
 
@@ -349,6 +366,12 @@ def run_suite():
     case_ids = normalize_case_ids(loads(suite.case_ids, []))
     cases = load_ordered_cases(case_ids)
     if data.get("async"):
+        running_result = ApiSuiteRunResult.query.filter(
+            ApiSuiteRunResult.suite_id == suite.id,
+            ApiSuiteRunResult.run_status.in_(["queued", "running"]),
+        ).order_by(db.desc(ApiSuiteRunResult.created_time)).first()
+        if running_result:
+            return jsonify({"code": 200, "msg": "接口集合正在执行中", "data": suite_result_payload(running_result)})
         suite_result = ApiSuiteRunResult(
             run_id=run_id,
             suite_id=suite.id,
@@ -366,7 +389,7 @@ def run_suite():
         )
         apply_run_user(suite_result)
         db.session.add(suite_result)
-        db.session.commit()
+        guarded_commit()
         app = current_app._get_current_object()
         account = current_account()
         account_info = {"id": account.id, "name": account.username} if account else None
@@ -379,6 +402,39 @@ def run_suite():
         return jsonify({"code": 200, "msg": "已开始异步执行", "data": suite_result_payload(suite_result)})
     payload = run_suite_payload(suite, environment_id, timeout, run_id)
     return jsonify({"code": 200, "msg": "执行完成", "data": payload})
+
+
+@api_test.route('/stop_suite', methods=["POST"])
+def stop_suite():
+    ensure_api_runtime_columns()
+    data = request.get_json(silent=True) or {}
+    result_id = int_or_none(data.get("result_id") or data.get("id"))
+    suite_id = int_or_none(data.get("suite_id"))
+    query = ApiSuiteRunResult.query
+    if result_id:
+        query = query.filter(ApiSuiteRunResult.id == result_id)
+    elif suite_id:
+        query = query.filter(
+            ApiSuiteRunResult.suite_id == suite_id,
+            ApiSuiteRunResult.run_status.in_(["queued", "running"]),
+        )
+    else:
+        return jsonify({"code": 400, "msg": "suite_id不能为空", "data": None})
+    result = query.order_by(db.desc(ApiSuiteRunResult.created_time)).first()
+    if not result:
+        return jsonify({"code": 404, "msg": "没有运行中的接口集合", "data": None})
+    if result.project_id:
+        permission_error = _check_project(result.project_id, "run")
+        if permission_error:
+            return permission_error
+    if result.run_status not in ("queued", "running"):
+        return jsonify({"code": 200, "msg": "当前接口集合未在执行中", "data": suite_result_payload(result)})
+    result.run_status = "stopped"
+    result.status_text = "已终止"
+    result.success = 0
+    result.error_message = "用户手动终止"
+    guarded_commit()
+    return jsonify({"code": 200, "msg": "已发送终止指令", "data": suite_result_payload(result)})
 
 
 @api_test.route('/get_suite_history', methods=["POST"])
@@ -478,3 +534,4 @@ def get_api_report_detail():
         if permission_error:
             return permission_error
     return jsonify({"code": 200, "msg": "请求成功", "data": api_report_payload(report)})
+

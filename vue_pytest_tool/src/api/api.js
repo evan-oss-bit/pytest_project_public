@@ -111,6 +111,10 @@ export const delete_api_suite = (params) => {
 export const run_api_suite = (params) => {
   return axios.post(`${base}/api_test/run_suite`, params);
 };
+//接口测试-终止集合
+export const stop_api_suite = (params) => {
+  return axios.post(`${base}/api_test/stop_suite`, params);
+};
 //接口测试-集合运行结果
 export const get_api_suite_result = (params) => {
   return axios.post(`${base}/api_test/get_suite_result`, params);

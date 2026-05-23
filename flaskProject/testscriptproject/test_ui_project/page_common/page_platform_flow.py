@@ -13,7 +13,7 @@ class PlatformFlowPage(BaseNaviationPage):
     def __init__(self, page: Page):
         super().__init__(page, "")
         self.url = os.getenv("PYTEST_TOOL_UI_BASE_URL", "http://127.0.0.1:8888/#/")
-        self.username = os.getenv("PYTEST_TOOL_UI_USERNAME", "admin")
+        self.username = os.getenv("PYTEST_TOOL_UI_USERNAME", "test_admin")
         self.password = os.getenv("PYTEST_TOOL_UI_PASSWORD", "123456789")
 
     def route_url(self, route):

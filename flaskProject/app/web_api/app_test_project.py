@@ -892,7 +892,7 @@ def _sync_project_script_cases(query, project_id, description="", script_type=1,
 @swag_from('../apidocs/get_project_info.yml')
 def get_project_info():
     """获取项目列表"""
-    _ensure_business_department_schema()
+    _ensure_project_meta_columns(backfill_legacy=False)
     page_no = request.json.get("page_no", request.json.get("page", 0))
     page_size = request.json.get("page_size", 100)
     name = request.json.get("name", "")

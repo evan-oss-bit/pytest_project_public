@@ -56,8 +56,8 @@ class AppConFig(object):
     # Database URL. Defaults to the bundled SQLite database for local startup.
     # MySQL example:
     # PYTEST_TOOL_DATABASE_URL = "mysql+pymysql://root:password@127.0.0.1:3306/database?charset=utf8mb4"
-    # sql_url = "mysql+pymysql://root:password@127.0.0.1:3306/database?charset=utf8mb4"
-    sql_url = f'sqlite:///{os.path.join(home_path, "db", "database.db")}'
+    sql_url = "mysql+pymysql://root:123456@127.0.0.1:3306/database?charset=utf8mb4"
+    # sql_url = f'sqlite:///{os.path.join(home_path, "db", "database.db")}'
     email_info = {
         "email_host": os.getenv("PYTEST_TOOL_EMAIL_HOST", ""),
         "token": os.getenv("PYTEST_TOOL_EMAIL_TOKEN", ""),
@@ -71,7 +71,13 @@ class AppConFig(object):
     @staticmethod
     def sqlalchemy_engine_options(db_path=None):
         if not AppConFig.is_sqlite(db_path):
-            return {}
+            return {
+                "pool_pre_ping": True,
+                "pool_size": 20,
+                "max_overflow": 30,
+                "pool_recycle": 1800,
+                "pool_timeout": 30,
+            }
         return {
             "connect_args": {
                 "timeout": 30,

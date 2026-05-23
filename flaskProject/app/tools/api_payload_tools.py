@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from app.lib.lib_define import db
-from app.models.test_api_models import ApiCase, ApiReport
+from app.models.test_api_models import ApiCase, ApiReport, ApiSuiteRunResult
 from app.tools.api_common_tools import int_or_none, json_text, loads, normalize_dependency_strategy, run_id_text, with_time
 from app.tools.api_schema_tools import ensure_api_case_columns
 
@@ -102,6 +102,11 @@ def suite_payload(item):
     data["stop_on_fail"] = 1 if data.get("stop_on_fail") else 0
     data["dependency_strategy"] = normalize_dependency_strategy(data.get("dependency_strategy"))
     data["last_run_time"] = data.get("last_run_time").strftime("%Y-%m-%d %H:%M:%S") if data.get("last_run_time") else ""
+    running_result = ApiSuiteRunResult.query.filter(
+        ApiSuiteRunResult.suite_id == item.id,
+        ApiSuiteRunResult.run_status.in_(["queued", "running"]),
+    ).order_by(db.desc(ApiSuiteRunResult.created_time)).first()
+    data["running_result"] = suite_result_payload(running_result) if running_result else None
     return data
 
 

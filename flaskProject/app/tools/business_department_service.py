@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import ast
+import threading
 from datetime import datetime
 
 from sqlalchemy import inspect, or_, text
@@ -9,6 +10,7 @@ from sqlalchemy.exc import OperationalError
 
 from app.lib.lib_define import db
 from app.models.test_api_models import BusinessDepartment, Cases, Project, Reports, TestSet, TestTask
+from app.tools.db_write_guard import guarded_commit, guarded_flush
 
 
 PROJECT_META_COLUMNS = {
@@ -22,6 +24,11 @@ PROJECT_META_COLUMNS = {
     "git_branch": "VARCHAR(191) DEFAULT ''",
     "git_auto_sync": "INTEGER DEFAULT 1",
 }
+
+_PROJECT_META_COLUMNS_READY = False
+_PROJECT_META_BACKFILL_READY = False
+_BUSINESS_DEPT_SCHEMA_READY = False
+_SCHEMA_LOCK = threading.RLock()
 
 
 def clean_project_value(value, default=""):
@@ -56,54 +63,70 @@ def safe_id_list(value):
     return []
 
 
-def ensure_project_meta_columns():
-    inspector = inspect(db.engine)
-    columns = {item.get("name") for item in inspector.get_columns("project")}
-    missing = [name for name in PROJECT_META_COLUMNS if name not in columns]
-    with db.engine.begin() as conn:
-        for name in missing:
-            try:
-                conn.execute(text(f"ALTER TABLE project ADD COLUMN {name} {PROJECT_META_COLUMNS[name]}"))
-            except OperationalError as e:
-                error_args = getattr(getattr(e, "orig", None), "args", ())
-                if error_args and error_args[0] == 1060:
-                    continue
-                if "duplicate column" in str(e).lower():
-                    continue
-                raise
-        if "product_line" in columns and "business_department" in PROJECT_META_COLUMNS:
-            conn.execute(text(
-                "UPDATE project SET business_department = product_line "
-                "WHERE (business_department IS NULL OR business_department = '') "
-                "AND product_line IS NOT NULL AND product_line != ''"
-            ))
+def ensure_project_meta_columns(backfill_legacy=True):
+    global _PROJECT_META_COLUMNS_READY, _PROJECT_META_BACKFILL_READY
+    if _PROJECT_META_COLUMNS_READY and (not backfill_legacy or _PROJECT_META_BACKFILL_READY):
+        return
+    with _SCHEMA_LOCK:
+        if _PROJECT_META_COLUMNS_READY and (not backfill_legacy or _PROJECT_META_BACKFILL_READY):
+            return
+        inspector = inspect(db.engine)
+        columns = {item.get("name") for item in inspector.get_columns("project")}
+        missing = [name for name in PROJECT_META_COLUMNS if name not in columns]
+        with db.engine.begin() as conn:
+            for name in missing:
+                try:
+                    conn.execute(text(f"ALTER TABLE project ADD COLUMN {name} {PROJECT_META_COLUMNS[name]}"))
+                except OperationalError as e:
+                    error_args = getattr(getattr(e, "orig", None), "args", ())
+                    if error_args and error_args[0] == 1060:
+                        continue
+                    if "duplicate column" in str(e).lower():
+                        continue
+                    raise
+            if backfill_legacy and not _PROJECT_META_BACKFILL_READY and "product_line" in columns:
+                conn.execute(text(
+                    "UPDATE project SET business_department = product_line "
+                    "WHERE (business_department IS NULL OR business_department = '') "
+                    "AND product_line IS NOT NULL AND product_line != ''"
+                ))
+        _PROJECT_META_COLUMNS_READY = True
+        if backfill_legacy:
+            _PROJECT_META_BACKFILL_READY = True
 
 
 def ensure_business_department_schema():
-    ensure_project_meta_columns()
-    BusinessDepartment.__table__.create(db.engine, checkfirst=True)
-    names = [
-        item[0] for item in db.session.query(Project.business_department)
-        .filter(Project.business_department.isnot(None), Project.business_department != "")
-        .distinct()
-        .all()
-    ]
-    changed = False
-    for name in names:
-        dept = BusinessDepartment.query.filter_by(name=name, is_delete=0).first()
-        if not dept:
-            dept = BusinessDepartment(name=name)
-            db.session.add(dept)
-            db.session.flush()
-            changed = True
-        updated = Project.query.filter(
-            Project.business_department == name,
-            or_(Project.business_department_id.is_(None), Project.business_department_id == 0)
-        ).update({"business_department_id": dept.id}, synchronize_session=False)
-        if updated:
-            changed = True
-    if changed:
-        db.session.commit()
+    global _BUSINESS_DEPT_SCHEMA_READY
+    if _BUSINESS_DEPT_SCHEMA_READY:
+        return
+    with _SCHEMA_LOCK:
+        if _BUSINESS_DEPT_SCHEMA_READY:
+            return
+        ensure_project_meta_columns()
+        BusinessDepartment.__table__.create(db.engine, checkfirst=True)
+        names = [
+            item[0] for item in db.session.query(Project.business_department)
+            .filter(Project.business_department.isnot(None), Project.business_department != "")
+            .distinct()
+            .all()
+        ]
+        changed = False
+        for name in names:
+            dept = BusinessDepartment.query.filter_by(name=name, is_delete=0).first()
+            if not dept:
+                dept = BusinessDepartment(name=name)
+                db.session.add(dept)
+                guarded_flush()
+                changed = True
+            updated = Project.query.filter(
+                Project.business_department == name,
+                or_(Project.business_department_id.is_(None), Project.business_department_id == 0)
+            ).update({"business_department_id": dept.id}, synchronize_session=False)
+            if updated:
+                changed = True
+        if changed:
+            guarded_commit()
+        _BUSINESS_DEPT_SCHEMA_READY = True
 
 
 def department_name_by_id(department_id):
