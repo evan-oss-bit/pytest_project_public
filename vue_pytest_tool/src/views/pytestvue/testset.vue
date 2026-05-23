@@ -872,10 +872,6 @@ export default {
         };
     },
 
-    created() {
-        // 在组件创建时调用后端接口，获取HTML内容
-        this.fetchHtmlContent();
-    },
     filters: {
         stateFmt(state) {
             return (

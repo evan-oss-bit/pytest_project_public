@@ -109,6 +109,7 @@
             <el-dropdown split-button type="success" @click="saveCase" @command="handleCaseCommand">
               保存
               <el-dropdown-menu slot="dropdown">
+                <el-dropdown-item command="data_driven">数据驱动运行</el-dropdown-item>
                 <el-dropdown-item command="copy">复制为新用例</el-dropdown-item>
                 <el-dropdown-item command="delete" divided>删除</el-dropdown-item>
               </el-dropdown-menu>
@@ -149,6 +150,8 @@
                 <el-button size="mini" icon="el-icon-plus" @click="addAssertion('status_code')">状态码</el-button>
                 <el-button size="mini" icon="el-icon-plus" @click="addAssertion('body_contains')">包含文本</el-button>
                 <el-button size="mini" icon="el-icon-plus" @click="addAssertion('json_equals')">JSON等于</el-button>
+                <el-button size="mini" icon="el-icon-plus" @click="addAssertion('response_time_lt')">响应时间</el-button>
+                <el-button size="mini" icon="el-icon-plus" @click="addAssertion('json_schema')">JSON Schema</el-button>
               </div>
               <el-table :data="currentCase.assertions" border size="mini">
                 <el-table-column label="类型" width="150">
@@ -158,17 +161,33 @@
                       <el-option label="Body包含" value="body_contains"></el-option>
                       <el-option label="JSON字段等于" value="json_equals"></el-option>
                       <el-option label="Header存在" value="header_exists"></el-option>
+                      <el-option label="响应时间小于" value="response_time_lt"></el-option>
+                      <el-option label="响应时间小于等于" value="response_time_lte"></el-option>
+                      <el-option label="JSON Schema" value="json_schema"></el-option>
                     </el-select>
                   </template>
                 </el-table-column>
                 <el-table-column label="JSON Path/Header" min-width="160">
                   <template slot-scope="scope">
-                    <el-input v-model="scope.row.path" size="mini" placeholder="data.id / Content-Type"></el-input>
+                    <el-input v-model="scope.row.path" size="mini" placeholder="data.id / Content-Type，可选"></el-input>
                   </template>
                 </el-table-column>
                 <el-table-column label="期望值" min-width="180">
                   <template slot-scope="scope">
-                    <el-input v-model="scope.row.expected" size="mini" placeholder="200 / success"></el-input>
+                    <el-input
+                      v-if="scope.row.type !== 'json_schema'"
+                      v-model="scope.row.expected"
+                      size="mini"
+                      placeholder="200 / success / 最大耗时ms">
+                    </el-input>
+                    <el-input
+                      v-else
+                      v-model="scope.row.expected"
+                      type="textarea"
+                      :rows="3"
+                      size="mini"
+                      placeholder='{"type":"object","required":["code"]}'>
+                    </el-input>
                   </template>
                 </el-table-column>
                 <el-table-column label="操作" width="70">
@@ -233,6 +252,19 @@
                   </template>
                 </el-table-column>
               </el-table>
+            </el-tab-pane>
+            <el-tab-pane label="Data" name="data">
+              <el-alert
+                title="JSON array rows become variables for the current API and dependency chain, for example username, password, data_row.id."
+                type="info"
+                :closable="false"
+                show-icon>
+              </el-alert>
+              <json-editor
+                v-model="currentCase.dataRowsText"
+                class="data-rows-editor"
+                :placeholder="dataRowsPlaceholder">
+              </json-editor>
             </el-tab-pane>
             <el-tab-pane label="环境变量" name="env">
               <div class="env-toolbar">
@@ -578,20 +610,44 @@
                       <el-tag size="mini" :type="resultTagType(scope.row)">{{ resultStatusText(scope.row) }}</el-tag>
                     </template>
                   </el-table-column>
-                  <el-table-column label="run_id" min-width="165" show-overflow-tooltip>
+                  <el-table-column label="run_id / 报告" min-width="300">
                     <template slot-scope="scope">
-                      <span class="copy-run-id" title="点击复制run_id" @click.stop="copyRunId(scope.row.run_id)">{{ scope.row.run_id || "-" }}</span>
+                      <div class="suite-run-report-cell">
+                        <span class="copy-run-id" title="点击复制run_id" @click.stop="copyRunId(scope.row.run_id)">{{ scope.row.run_id || "-" }}</span>
+                        <span class="suite-inline-actions">
+                          <el-button size="mini" type="text" icon="el-icon-view" @click.stop="previewSuiteReport(scope.row)">预览</el-button>
+                          <el-button size="mini" type="text" icon="el-icon-download" @click.stop="downloadSuiteReport(scope.row)">下载</el-button>
+                        </span>
+                      </div>
                     </template>
                   </el-table-column>
-                  <el-table-column label="统计" min-width="145">
-                    <template slot-scope="scope">
-                      总 {{ scope.row.total_count || 0 }} / 过 {{ scope.row.pass_count || 0 }} / 败 {{ scope.row.fail_count || 0 }}
-                    </template>
-                  </el-table-column>
+                  <el-table-column prop="stats_text" label="统计" min-width="170" show-overflow-tooltip></el-table-column>
                   <el-table-column prop="elapsed_ms" label="耗时ms" width="85"></el-table-column>
                   <el-table-column prop="run_by_name" label="执行人" width="95"></el-table-column>
-                  <el-table-column prop="created_time" label="执行时间" width="155"></el-table-column>
+                  <el-table-column prop="created_time" label="执行时间" min-width="175" show-overflow-tooltip></el-table-column>
                 </el-table>
+                <div v-if="sideMode === 'suite' && suiteCompare && suiteCompare.current && suiteCompare.previous" class="suite-compare-panel">
+                  <div>
+                    <span>通过率变化</span>
+                    <strong :class="deltaClass(suiteCompare.delta.pass_rate)">{{ formatDelta(suiteCompare.delta.pass_rate) }}%</strong>
+                  </div>
+                  <div>
+                    <span>失败数变化</span>
+                    <strong :class="deltaClass(-(suiteCompare.delta.fail_count || 0))">{{ formatDelta(suiteCompare.delta.fail_count) }}</strong>
+                  </div>
+                  <div>
+                    <span>耗时变化</span>
+                    <strong :class="deltaClass(-(suiteCompare.delta.elapsed_ms || 0))">{{ formatDelta(suiteCompare.delta.elapsed_ms) }}ms</strong>
+                  </div>
+                  <div>
+                    <span>新增失败</span>
+                    <strong class="danger-text">{{ (suiteCompare.delta.new_failed || []).length }}</strong>
+                  </div>
+                  <div>
+                    <span>已修复</span>
+                    <strong class="success-text">{{ (suiteCompare.delta.fixed || []).length }}</strong>
+                  </div>
+                </div>
               </el-tab-pane>
               <el-tab-pane :label="sideMode === 'case' ? '接口结果' : '集合结果'" name="suite_result">
                 <div v-if="sideMode === 'case' && lastResult">
@@ -608,6 +664,27 @@
                     <div><span>执行时间</span><strong>{{ lastResult.created_time || "-" }}</strong></div>
                     <div><span>错误信息</span><strong>{{ lastResult.error_message || "-" }}</strong></div>
                   </div>
+                  <el-table
+                    v-if="lastResult.data_results && lastResult.data_results.length"
+                    class="suite-step-table"
+                    :data="lastResult.data_results"
+                    size="mini"
+                    border
+                    height="260">
+                    <el-table-column prop="data_index" label="#" width="55"></el-table-column>
+                    <el-table-column prop="case_name" label="接口" min-width="180"></el-table-column>
+                    <el-table-column prop="response_status" label="状态" width="75"></el-table-column>
+                    <el-table-column prop="elapsed_ms" label="耗时ms" width="85"></el-table-column>
+                    <el-table-column label="结果" width="80">
+                      <template slot-scope="scope">
+                        <el-tag size="mini" :type="resultTagType(scope.row)">{{ resultStatusText(scope.row) }}</el-tag>
+                      </template>
+                    </el-table-column>
+                    <el-table-column label="数据行" min-width="220" show-overflow-tooltip>
+                      <template slot-scope="scope">{{ scope.row.data_row }}</template>
+                    </el-table-column>
+                    <el-table-column prop="error_message" label="错误" min-width="160" show-overflow-tooltip></el-table-column>
+                  </el-table>
                 </div>
                 <div v-else-if="sideMode === 'case'" class="response-empty-state">暂无接口结果，发送接口或选择执行历史后展示</div>
                 <div v-else-if="suiteResult">
@@ -681,6 +758,7 @@
 </template>
 
 <script>
+import axios from "axios";
 import {
   delete_api_case,
   delete_api_environment,
@@ -690,8 +768,10 @@ import {
   get_api_run_history,
   get_api_run_result,
   get_api_suite_history,
+  get_api_suite_history_compare,
   get_api_suite_info,
   get_api_suite_result,
+  get_url,
   get_project_info,
   run_api_case,
   run_api_suite,
@@ -720,6 +800,7 @@ function emptyCase() {
     assertions: [{ type: "status_code", expected: "200", path: "" }],
     pre_case_ids: [],
     extractors: [],
+    dataRowsText: "[]",
   };
 }
 
@@ -747,6 +828,7 @@ export default {
       urlPlaceholder: "https://api.example.com/users/{{id}}",
       headersPlaceholder: '{"Authorization": "Basic {{token|basic}}"}',
       envPlaceholder: '{"host": "http://127.0.0.1:5400", "token": "xxx"}',
+      dataRowsPlaceholder: '[\n  {"username": "user1", "password": "123456"},\n  {"username": "user2", "password": "123456"}\n]',
       caseLoading: false,
       running: false,
       envDialogVisible: false,
@@ -768,6 +850,7 @@ export default {
       suitePickAvailableIds: [],
       suitePickSelectedIds: [],
       suiteHistory: [],
+      suiteCompare: null,
       suiteHistoryLoading: false,
       casePollTimer: null,
       suitePollTimer: null,
@@ -938,6 +1021,120 @@ export default {
       }
       this.copyText(String(runId), "run_id 已复制");
     },
+    formatDelta(value) {
+      const num = Number(value || 0);
+      return `${num > 0 ? "+" : ""}${num}`;
+    },
+    deltaClass(value) {
+      const num = Number(value || 0);
+      if (num > 0) {
+        return "success-text";
+      }
+      if (num < 0) {
+        return "danger-text";
+      }
+      return "";
+    },
+    normalizeSuiteHistoryRow(row) {
+      const item = Object.assign({}, row || {});
+      const total = this.suiteHistoryStat(item, "total");
+      const passed = this.suiteHistoryStat(item, "passed");
+      const failed = this.suiteHistoryStat(item, "failed");
+      item.total_count = total;
+      item.pass_count = passed;
+      item.fail_count = failed;
+      item.stats_text = item.stats_text || `总 ${total} / 过 ${passed} / 败 ${failed}`;
+      if (!item.report_path && item.run_id) {
+        item.report_path = `api_suite_${item.run_id}.html`;
+      }
+      return item;
+    },
+    reportFileName(row) {
+      const item = this.normalizeSuiteHistoryRow(row);
+      return item && item.report_path ? item.report_path : "";
+    },
+    reportRequestHeaders() {
+      const token = sessionStorage.getItem("token");
+      if (!token) {
+        return {};
+      }
+      return {
+        Authorization: `Basic ${window.btoa(token + ":")}`,
+      };
+    },
+    fetchSuiteReport(row) {
+      const filename = this.reportFileName(row);
+      if (!filename) {
+        this.$message.warning("当前执行历史没有生成报告");
+        return Promise.reject(new Error("missing report"));
+      }
+      return axios({
+        method: "POST",
+        url: get_url() + "/report/report_content",
+        data: { filename },
+        headers: this.reportRequestHeaders(),
+      }).then((res) => {
+        if (res.data && res.data.code === 401) {
+          this.$message.warning(res.data.msg || "请先登录后再预览报告");
+          return Promise.reject(new Error(res.data.msg || "unauthorized"));
+        }
+        if (res.data && res.data.code === 404) {
+          this.$message.warning(res.data.msg || "报告不存在");
+          return Promise.reject(new Error(res.data.msg || "report not found"));
+        }
+        return res.data;
+      });
+    },
+    previewSuiteReport(row) {
+      this.fetchSuiteReport(row).then((content) => {
+        const win = window.open("", "_blank");
+        if (!win) {
+          this.$message.warning("浏览器拦截了报告预览窗口");
+          return;
+        }
+        win.document.open();
+        win.document.write(content);
+        win.document.close();
+      }).catch(() => {});
+    },
+    downloadSuiteReport(row) {
+      this.fetchSuiteReport(row).then((content) => {
+        const blob = new Blob([content], { type: "text/html;charset=utf-8" });
+        const link = document.createElement("a");
+        link.download = this.reportFileName(row);
+        link.style.display = "none";
+        link.href = URL.createObjectURL(blob);
+        document.body.appendChild(link);
+        link.click();
+        URL.revokeObjectURL(link.href);
+        document.body.removeChild(link);
+      }).catch(() => {});
+    },
+    suiteHistoryStat(row, type) {
+      if (!row) {
+        return 0;
+      }
+      const steps = Array.isArray(row.step_results) ? row.step_results : [];
+      const savedTotal = Number(row.total_count || 0);
+      if (type === "total") {
+        return savedTotal || steps.length || 0;
+      }
+      if (type === "passed") {
+        const value = Number(row.pass_count || 0);
+        if (savedTotal || value) {
+          return value;
+        }
+        return steps.filter((item) => item && (item.success === 1 || item.success === true || item.success === "1" || item.success === "true" || item.success === "True")).length;
+      }
+      if (type === "failed") {
+        const value = Number(row.fail_count || 0);
+        if (savedTotal || value) {
+          return value;
+        }
+        return steps.filter((item) => item && (item.success === 0 || item.success === false || item.success === "0" || item.success === "false" || item.success === "False")).length;
+      }
+      return 0;
+    },
     fallbackCopy(text, done) {
       const input = document.createElement("textarea");
       input.value = text;
@@ -990,6 +1187,7 @@ export default {
         assertions: row.assertions && row.assertions.length ? row.assertions : [],
         pre_case_ids: row.pre_case_ids || [],
         extractors: row.extractors || [],
+        dataRowsText: this.prettyJson(row.data_rows || []),
       };
     },
     methodType(method) {
@@ -1250,6 +1448,7 @@ export default {
         assertions: this.currentCase.assertions || [],
         pre_case_ids: this.currentCase.pre_case_ids || [],
         extractors: this.currentCase.extractors || [],
+        data_rows: this.parseJson(this.currentCase.dataRowsText, []),
       };
     },
     async saveCase() {
@@ -1275,6 +1474,28 @@ export default {
         }
         this.lastResult = res.data.data;
         this.responseTab = "body";
+        this.pollCaseResult(this.lastResult.id);
+      }).catch(() => {
+        this.running = false;
+      });
+    },
+    async runDataDrivenCase() {
+      const payload = this.payloadFromCase();
+      if (!payload.data_rows || !payload.data_rows.length) {
+        this.$message.warning("请先在数据驱动中填写至少一组数据");
+        this.activeTab = "data";
+        return;
+      }
+      this.running = true;
+      this.clearCasePoll();
+      await run_api_case(Object.assign({}, payload, { async: true, data_driven: true })).then((res) => {
+        if (!res.data || res.data.code !== 200) {
+          this.$message.warning((res.data && res.data.msg) || "执行失败");
+          this.running = false;
+          return;
+        }
+        this.lastResult = res.data.data;
+        this.responseTab = "suite_result";
         this.pollCaseResult(this.lastResult.id);
       }).catch(() => {
         this.running = false;
@@ -1310,6 +1531,9 @@ export default {
       });
     },
     handleCaseCommand(command) {
+      if (command === "data_driven") {
+        this.runDataDrivenCase();
+      }
       if (command === "copy") {
         this.currentCase.id = "";
         this.currentCase.name = this.currentCase.name + "_copy";
@@ -1463,7 +1687,7 @@ export default {
           this.suiteRunning = false;
           return;
         }
-        this.suiteResult = res.data.data;
+        this.suiteResult = this.normalizeSuiteHistoryRow(res.data.data);
         this.lastResult = { success: this.suiteResult.success, run_status: this.suiteResult.run_status, status_text: this.suiteResult.status_text, response_status: "-", elapsed_ms: this.suiteResult.elapsed_ms, run_id: this.suiteResult.run_id, assertion_result: [], extractor_result: [] };
         this.responseTab = "suite_result";
         this.pollSuiteResult(this.suiteResult.id);
@@ -1484,7 +1708,7 @@ export default {
       }
       get_api_suite_result({ id: resultId }).then((res) => {
         if (res.data && res.data.code === 200) {
-          this.suiteResult = res.data.data;
+          this.suiteResult = this.normalizeSuiteHistoryRow(res.data.data);
           this.lastResult = { success: this.suiteResult.success, run_status: this.suiteResult.run_status, status_text: this.suiteResult.status_text, response_status: "-", elapsed_ms: this.suiteResult.elapsed_ms, run_id: this.suiteResult.run_id, assertion_result: [], extractor_result: [] };
           const status = this.suiteResult.run_status;
           if (status === "queued" || status === "running") {
@@ -1519,12 +1743,13 @@ export default {
     async loadSuiteHistory() {
       if (!this.suiteForm.id) {
         this.suiteHistory = [];
+        this.suiteCompare = null;
         return;
       }
       this.suiteHistoryLoading = true;
       await get_api_suite_history({ suite_id: this.suiteForm.id, limit: 30 }).then((res) => {
         if (res.data && res.data.code === 200) {
-          this.suiteHistory = res.data.data || [];
+          this.suiteHistory = (res.data.data || []).map((item) => this.normalizeSuiteHistoryRow(item));
         } else {
           this.suiteHistory = [];
         }
@@ -1533,8 +1758,18 @@ export default {
       }).finally(() => {
         this.suiteHistoryLoading = false;
       });
+      await get_api_suite_history_compare({ suite_id: this.suiteForm.id, environment_id: this.quickSuiteEnvironmentId || this.suiteForm.environment_id || "", limit: 10 }).then((res) => {
+        if (res.data && res.data.code === 200) {
+          this.suiteCompare = res.data.data || null;
+        } else {
+          this.suiteCompare = null;
+        }
+      }).catch(() => {
+        this.suiteCompare = null;
+      });
     },
     selectSuiteHistory(row) {
+      row = this.normalizeSuiteHistoryRow(row);
       this.suiteResult = row;
       this.lastResult = {
         success: row.success,
@@ -1894,6 +2129,42 @@ export default {
 .copy-value:hover {
   text-decoration: underline;
 }
+.suite-run-report-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.suite-run-report-cell .copy-run-id {
+  flex: 1;
+  min-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.suite-inline-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+.report-action-link {
+  display: inline-block;
+  margin-right: 10px;
+  color: #2f80ed;
+  cursor: pointer;
+  user-select: none;
+}
+.report-action-link:hover {
+  text-decoration: underline;
+}
+.suite-history-stats {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+  line-height: 1.6;
+}
 .suite-layout {
   display: block;
 }
@@ -2133,6 +2404,38 @@ export default {
   border-radius: 6px;
   background: #fff;
   overflow: hidden;
+}
+.suite-compare-panel {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid #dfe8f4;
+  border-radius: 6px;
+  background: #f8fbff;
+}
+.suite-compare-panel div {
+  padding: 8px;
+  border-radius: 4px;
+  background: #fff;
+}
+.suite-compare-panel span {
+  display: block;
+  color: #7a8aa0;
+  font-size: 12px;
+}
+.suite-compare-panel strong {
+  display: block;
+  margin-top: 4px;
+  color: #24364b;
+  font-size: 16px;
+}
+.success-text {
+  color: #30a46c !important;
+}
+.danger-text {
+  color: #f56c6c !important;
 }
 .suite-bottom-grid {
   display: grid;

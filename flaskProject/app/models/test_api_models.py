@@ -319,6 +319,7 @@ class ApiCase(Base, BaseMixin):
     assertions = db.Column(db.TEXT(65533), nullable=True)
     pre_case_ids = db.Column(db.TEXT(65533), nullable=True)
     extractors = db.Column(db.TEXT(65533), nullable=True)
+    data_rows = db.Column(db.TEXT(65533), nullable=True)
     description = db.Column(db.String(1000), nullable=True, default="")
     last_status = db.Column(db.Integer, nullable=True)
     last_success = db.Column(db.Integer, nullable=True)

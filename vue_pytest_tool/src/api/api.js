@@ -119,6 +119,10 @@ export const get_api_suite_result = (params) => {
 export const get_api_suite_history = (params) => {
   return axios.post(`${base}/api_test/get_suite_history`, params);
 };
+//接口测试-集合历史对比
+export const get_api_suite_history_compare = (params) => {
+  return axios.post(`${base}/api_test/get_suite_history_compare`, params);
+};
 //接口测试-报告列表
 export const get_api_report_info = (params) => {
   return axios.post(`${base}/api_test/get_api_report_info`, params);
