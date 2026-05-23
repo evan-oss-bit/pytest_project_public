@@ -7,17 +7,67 @@ from config import logs
 import configparser
 import time
 import config
+import importlib
 from app.models.test_api_models import *
 from app.lib.image import *
 from app.commom.create_report import *
 import yagmail
 import os
+import sys
 import traceback
 import asyncio
 # from aiofiles import open as async_open
 import aiofiles
 from app.tools.util import EmailThread
+from app.tools.console_encoding import configure_console_streams
 import copy
+
+configure_console_streams()
+
+
+def _build_pytest_args(run_info, extra_args=None):
+    args = list(run_info or [])
+    if extra_args and isinstance(extra_args, list):
+        args = list(extra_args) + args
+    return args
+
+
+def _project_name_from_pytest_args(pytest_args):
+    marker = "testscriptproject/"
+    for item in pytest_args or []:
+        normalized = str(item).replace("\\", "/")
+        if marker not in normalized:
+            continue
+        project_part = normalized.split(marker, 1)[1]
+        project_name = project_part.split("/", 1)[0].split("::", 1)[0]
+        if project_name:
+            return project_name
+    return None
+
+
+def _clear_script_project_import_cache(project_name=None, pytest_args=None):
+    project_name = project_name or _project_name_from_pytest_args(pytest_args)
+    if not project_name:
+        return
+
+    importlib.invalidate_caches()
+    module_prefix = f"testscriptproject.{project_name}"
+    project_dir = os.path.normcase(os.path.abspath(os.path.join(config.testscriptproject, project_name)))
+
+    for module_name, module in list(sys.modules.items()):
+        if module_name == module_prefix or module_name.startswith(module_prefix + "."):
+            sys.modules.pop(module_name, None)
+            continue
+
+        module_file = getattr(module, "__file__", None)
+        if not module_file:
+            continue
+        module_path = os.path.normcase(os.path.abspath(module_file))
+        try:
+            if os.path.commonpath([project_dir, module_path]) == project_dir:
+                sys.modules.pop(module_name, None)
+        except ValueError:
+            continue
 
 
 async def write_to_logfile(file_path_name, log_info, longrepr):
@@ -80,6 +130,7 @@ def update_config_file(config_id, project="testcenter", file_name="data.ini"):
 
 
 def script_run(*args, **kwargs):
+    configure_console_streams()
     session = kwargs.get("db_session")
     case_title = kwargs.get("case_title")
     set_id = kwargs.get("set_id")
@@ -96,7 +147,9 @@ def script_run(*args, **kwargs):
 
     try:
         plugin = JSONReport()
-        pytest.main(args[0], plugins=[plugin])
+        pytest_args = _build_pytest_args(args[0])
+        _clear_script_project_import_cache(project_name, pytest_args)
+        pytest.main(pytest_args, plugins=[plugin])
         tests = plugin.report.get("tests")
         created = plugin.report.get("created")
         ten_time = time.localtime(created)
@@ -250,6 +303,7 @@ def script_run(*args, **kwargs):
 #
 #     # return tests
 def single_script_run(*args, **kwargs):
+    configure_console_streams()
     session = kwargs.get("db_session")
     case_title = kwargs.get("case_title")
     set_id = kwargs.get("set_id")
@@ -266,7 +320,9 @@ def single_script_run(*args, **kwargs):
 
     try:
         plugin = JSONReport()
-        pytest.main(args[0], plugins=[plugin])
+        pytest_args = _build_pytest_args(args[0])
+        _clear_script_project_import_cache(project_name, pytest_args)
+        pytest.main(pytest_args, plugins=[plugin])
         tests = plugin.report.get("tests")
         # print(plugin.report)
         created = plugin.report.get("created")
@@ -319,6 +375,7 @@ def single_script_run(*args, **kwargs):
 
 
 def process_run(kwargs, session, case_ids):
+    configure_console_streams()
     """
 
     :param kwargs:
@@ -340,10 +397,10 @@ def process_run(kwargs, session, case_ids):
     for query in querys:
         relative_case_paths.append(query.relative_case_path)
     run_info = ["-n", str(kwargs.get("start_process"))] + relative_case_paths
-    if kwargs.get("run_parameter") and isinstance(kwargs.get("run_parameter"), list):
-        run_info = kwargs.get("run_parameter") + run_info
+    run_info = _build_pytest_args(run_info, kwargs.get("run_parameter"))
     try:
         plugin = JSONReport()
+        _clear_script_project_import_cache(kwargs.get("project_name"), run_info)
         pytest.main(run_info, plugins=[plugin])
         tests = plugin.report.get("tests")
         created = plugin.report.get("created")
@@ -420,6 +477,7 @@ def process_run(kwargs, session, case_ids):
 
 
 def th_run_set(**kwargs):
+    configure_console_streams()
     """
 
     :param kwargs:
@@ -490,8 +548,7 @@ def th_run_set(**kwargs):
                     query.run_status = "测试中"
                     session.commit()
                     # run_info = ["--browser", "webkit", "--headed"] + [query.relative_case_path]
-                    if kwargs.get("run_parameter") and isinstance(kwargs.get("run_parameter"), list):
-                        run_info = kwargs.get("run_parameter") + run_info
+                    run_info = _build_pytest_args(run_info, kwargs.get("run_parameter"))
                     tests = single_script_run(run_info,
                                               case_title=case_title, case_name=case_name, mark=kwargs.get("mark"),
                                               case_id=case_id, run_id=kwargs.get("run_id_num"),
@@ -607,6 +664,7 @@ def th_run_set(**kwargs):
 
 
 def th_run_task(**kwargs):
+    configure_console_streams()
     """测试任务执行"""
     # print(kwargs)
     session = config.db_work(db_path=config.AppConFig.sql_url)

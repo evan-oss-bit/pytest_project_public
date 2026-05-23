@@ -50,12 +50,14 @@ pytest_project/
 
 ## 环境要求
 
-- Python 3.8
+- Python 3.14
 - Node.js 14.x / npm
 - Redis：用于定时任务 job store
 - Git
 
-项目目前主要按 Python 3.8 虚拟环境运行。前端依赖包含 `node-sass@4.14.1`，建议使用 Node.js 14.x；Node.js 18/20 可能会出现依赖安装失败。
+项目后端已迁移到 Python 3.14，`requirements.txt` 中的 C 扩展依赖已升级到支持 Python 3.14 的版本。前端依赖包含 `node-sass@4.14.1`，建议使用 Node.js 14.x；Node.js 18/20 可能会出现依赖安装失败。
+
+本次迁移同时处理了 Windows 控制台中文输出编码，并在执行 pytest 前清理当前脚本项目的 import 缓存。也就是说，在线修改或 Git 更新脚本源码后，再次运行用例会优先加载当前脚本项目的最新代码，不需要为了普通脚本变更重启后端服务。
 
 ## 后端启动
 
@@ -65,6 +67,13 @@ python -m venv venv
 .\venv\Scripts\activate
 pip install -r requirements.txt
 copy .env.example .env
+python app.py
+```
+
+MySQL 部署时使用环境变量指定数据库，不要把账号密码写死到 `config.py`：
+
+```powershell
+$env:PYTEST_TOOL_DATABASE_URL="mysql+pymysql://root:password@127.0.0.1:3306/database?charset=utf8mb4"
 python app.py
 ```
 
@@ -88,7 +97,7 @@ cd flaskProject
 python app.py
 ```
 
-`production_server.py` 目前暂不作为推荐入口，待生产启动链路验证完成后再启用。
+当前生产/本地启动入口临时统一使用 `app.py`。`app.py` 已在 Python 3.14 下验证，支持通过 `PYTEST_TOOL_HOST`、`PYTEST_TOOL_PORT`、`PYTEST_TOOL_DEBUG` 调整监听地址、端口和调试模式。
 
 ## 前端启动
 
@@ -124,7 +133,7 @@ vue_pytest_tool/src/api/api.js
 
 新机器还需要自己准备：
 
-- Python 3.8 环境。当前项目主要按 Python 3.8 验证。
+- Python 3.14 环境。当前后端依赖已按 Python 3.14 验证。
 - Node.js 14.x / npm 6.x。老版 `node-sass` 对 Node 18/20 不友好。
 - Git 命令行。脚本项目 Git 拉取功能依赖 `git` 在 PATH 中可用。
 - Redis。定时任务 job store 依赖 Redis，默认 `127.0.0.1:6379`、DB `3`。不启动 Redis 时，普通页面和部分功能仍可打开，但后端会持续打印 Redis 连接失败日志，定时任务不可用。
@@ -218,4 +227,3 @@ flaskProject/testscriptproject/testcenter_demo_new/
 ```
 
 账号密码已使用哈希存储。管理员可以在“账号权限”页面维护账号，并将其他账号密码重置为初始密码。
-

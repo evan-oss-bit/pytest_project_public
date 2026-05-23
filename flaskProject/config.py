@@ -53,12 +53,10 @@ executors = {
 
 
 class AppConFig(object):
-    # 本地mysql_url
-    # sql_url = 'mysql+pymysql://root:123456@127.0.0.1:3306/database?charset=utf8'
-
-    # 本地sqlite数据库文件
+    # Database URL. Defaults to the bundled SQLite database for local startup.
+    # MySQL example:
+    # PYTEST_TOOL_DATABASE_URL=mysql+pymysql://root:password@127.0.0.1:3306/database?charset=utf8mb4
     sql_url = os.getenv("PYTEST_TOOL_DATABASE_URL") or f'sqlite:///{os.path.join(home_path, "db", "database.db")}'
-    # Remote database can be configured through PYTEST_TOOL_DATABASE_URL.
     email_info = {
         "email_host": os.getenv("PYTEST_TOOL_EMAIL_HOST", ""),
         "token": os.getenv("PYTEST_TOOL_EMAIL_TOKEN", ""),

@@ -1,5 +1,9 @@
-# !/usr/bin/python3.8
+# !/usr/bin/python3
 # -*- coding: utf-8 -*-
+from app.tools.console_encoding import configure_console_streams
+
+configure_console_streams()
+
 from celery import Celery
 from flask import Flask, request
 import logging
