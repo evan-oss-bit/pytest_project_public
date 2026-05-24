@@ -135,6 +135,46 @@ export const get_api_report_info = (params) => {
 export const get_api_report_detail = (params) => {
   return axios.post(`${base}/api_test/get_api_report_detail`, params);
 };
+//性能测试-接口列表
+export const get_perf_endpoint_info = (params) => {
+  return axios.post(`${base}/performance_test/get_endpoint_info`, params);
+};
+//性能测试-保存接口
+export const save_perf_endpoint = (params) => {
+  return axios.post(`${base}/performance_test/save_endpoint`, params);
+};
+//性能测试-删除接口
+export const delete_perf_endpoint = (params) => {
+  return axios.post(`${base}/performance_test/delete_endpoint`, params);
+};
+//性能测试-场景列表
+export const get_perf_scenario_info = (params) => {
+  return axios.post(`${base}/performance_test/get_scenario_info`, params);
+};
+//性能测试-保存场景
+export const save_perf_scenario = (params) => {
+  return axios.post(`${base}/performance_test/save_scenario`, params);
+};
+//性能测试-删除场景
+export const delete_perf_scenario = (params) => {
+  return axios.post(`${base}/performance_test/delete_scenario`, params);
+};
+//性能测试-运行场景
+export const run_perf_scenario = (params) => {
+  return axios.post(`${base}/performance_test/run_scenario`, params);
+};
+//性能测试-终止运行
+export const stop_perf_run = (params) => {
+  return axios.post(`${base}/performance_test/stop_run`, params);
+};
+//性能测试-运行结果
+export const get_perf_run_result = (params) => {
+  return axios.post(`${base}/performance_test/get_run_result`, params);
+};
+//性能测试-历史记录
+export const get_perf_run_history = (params) => {
+  return axios.post(`${base}/performance_test/get_run_history`, params);
+};
 //业务部门-获取业务部门列表
 export const get_business_department_info = (params) => {
   return axios.post(`${base}/business_department/get_business_department_info`, params);

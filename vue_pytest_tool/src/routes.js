@@ -14,6 +14,7 @@ import RESULT from './views/pytestvue/result.vue'
 import REPORT from './views/pytestvue/report.vue'
 import TESTTASK from './views/pytestvue/testtask.vue'
 import API_TEST from './views/pytestvue/api_test.vue'
+import PERFORMANCE_TEST from './views/pytestvue/performance_test.vue'
 import ACCOUNT from './views/pytestvue/account.vue'
 import OPERATION_LOG from './views/pytestvue/operation_log.vue'
 
@@ -38,6 +39,16 @@ let routes = [
         iconCls: 'fa fa-dashboard',
         children: [
             { path: '/dashboard', component: DASHBOARD, name: '首页看板' }
+        ]
+    },
+    {
+        path: '/',
+        component: Home,
+        name: '性能测试',
+        leaf: true,
+        iconCls: 'fa fa-tachometer',
+        children: [
+            { path: '/performance_test', component: PERFORMANCE_TEST, name: '性能测试' }
         ]
     },
     {

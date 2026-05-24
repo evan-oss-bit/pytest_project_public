@@ -34,6 +34,7 @@ ACTION_RULES = [
 
 TARGET_RULES = [
     ("/api_test/", "api_test", "接口测试"),
+    ("/performance_test/", "performance_test", "性能测试"),
     ("/business_department/", "business_department", "业务部门"),
     ("/project/", "project", "脚本项目"),
     ("/version/", "version", "项目版本"),

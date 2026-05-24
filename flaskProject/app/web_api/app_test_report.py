@@ -11,7 +11,7 @@ from sqlalchemy import inspect, text
 
 from app.lib import image
 from app.lib.lib_define import db
-from app.models.test_api_models import ApiReport, CaseResult, Cfgs, Reports, TestSet
+from app.models.test_api_models import ApiReport, CaseResult, Cfgs, PerfRunResult, Reports, TestSet
 from app.tools import request_details
 from app.tools.auth_permissions import allowed_project_ids, project_id_from_report_path, require_project_permission
 from app.tools.util import EmailThread
@@ -298,6 +298,20 @@ def report_content():
                 return jsonify({"code": 404, "msg": "æµ‹è¯•æŠ¥å‘Šä¸å­˜åœ¨ï¼", "data": None})
             with open(report_allpath, "rb") as f:
                 return Response(f.read(), mimetype=_report_mimetype(api_query.report_path))
+        perf_query = PerfRunResult.query.filter_by(report_path=filename).order_by(
+            db.desc(PerfRunResult.updated_time)).first()
+        if perf_query:
+            if perf_query.project_id:
+                permission_error = require_project_permission(perf_query.project_id, "view")
+                if permission_error:
+                    return permission_error
+            report_allpath = _safe_report_file_path(perf_query.report_path)
+            if not report_allpath:
+                return jsonify({"code": 404, "msg": "性能测试报告路径不合法！", "data": None})
+            if not os.path.exists(report_allpath):
+                return jsonify({"code": 404, "msg": "性能测试报告不存在！", "data": None})
+            with open(report_allpath, "rb") as f:
+                return Response(f.read(), mimetype=_report_mimetype(perf_query.report_path))
     if not filename:
         return jsonify({"code": 404, "msg": "没有测试报告", "data": None})
     query = Reports.query.filter_by(report_path=filename).order_by(

@@ -407,3 +407,55 @@ class ApiReport(Base, BaseMixin):
     summary = db.Column(db.TEXT(65533), nullable=True)
     detail = db.Column(db.TEXT(65533), nullable=True)
     is_delete = db.Column(db.Integer, nullable=True, default=0)
+
+
+class PerfEndpoint(Base, BaseMixin):
+    """性能测试接口管理，独立于接口测试用例"""
+    __tablename__ = 'perf_endpoint'
+    name = db.Column(db.String(191), nullable=False, index=True)
+    project_id = db.Column(db.Integer, nullable=True, index=True)
+    method = db.Column(db.String(20), nullable=False, default="GET")
+    url = db.Column(db.String(2000), nullable=False)
+    headers = db.Column(db.TEXT(65533), nullable=True)
+    params = db.Column(db.TEXT(65533), nullable=True)
+    body_type = db.Column(db.String(40), nullable=True, default="json")
+    body = db.Column(db.TEXT(65533), nullable=True)
+    weight = db.Column(db.Integer, nullable=True, default=1)
+    description = db.Column(db.String(1000), nullable=True, default="")
+    is_delete = db.Column(db.Integer, nullable=True, default=0)
+
+
+class PerfScenario(Base, BaseMixin):
+    """性能测试场景编排，独立于 pytest 测试集和接口集合"""
+    __tablename__ = 'perf_scenario'
+    name = db.Column(db.String(191), nullable=False, index=True)
+    project_id = db.Column(db.Integer, nullable=True, index=True)
+    endpoint_ids = db.Column(db.TEXT(65533), nullable=True)
+    users = db.Column(db.Integer, nullable=True, default=1)
+    spawn_rate = db.Column(db.Float, nullable=True, default=1)
+    run_time = db.Column(db.String(40), nullable=True, default="1m")
+    host = db.Column(db.String(1000), nullable=True, default="")
+    description = db.Column(db.String(1000), nullable=True, default="")
+    last_status = db.Column(db.String(40), nullable=True, default="")
+    last_run_id = db.Column(db.BigInteger, nullable=True, index=True)
+    last_run_time = db.Column(db.DateTime, nullable=True)
+    is_delete = db.Column(db.Integer, nullable=True, default=0)
+
+
+class PerfRunResult(Base, BaseMixin):
+    """性能测试 Locust 执行历史和实时指标"""
+    __tablename__ = 'perf_run_result'
+    run_id = db.Column(db.BigInteger, nullable=True, index=True, default=0)
+    scenario_id = db.Column(db.Integer, nullable=True, index=True)
+    project_id = db.Column(db.Integer, nullable=True, index=True)
+    run_status = db.Column(db.String(40), nullable=True, default="queued", index=True)
+    status_text = db.Column(db.String(191), nullable=True, default="")
+    users = db.Column(db.Integer, nullable=True, default=1)
+    spawn_rate = db.Column(db.Float, nullable=True, default=1)
+    run_time = db.Column(db.String(40), nullable=True, default="1m")
+    host = db.Column(db.String(1000), nullable=True, default="")
+    metrics = db.Column(db.TEXT(65533), nullable=True)
+    error_message = db.Column(db.TEXT(65533), nullable=True)
+    report_path = db.Column(db.String(1000), nullable=True)
+    elapsed_ms = db.Column(db.Integer, nullable=True)
+    success = db.Column(db.Integer, nullable=True, default=0)
